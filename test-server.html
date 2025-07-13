@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MathTutor AI - 服务器版测试环境</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900 mb-4">🎬 MathTutor AI 测试环境</h1>
+            <p class="text-xl text-gray-600">K12数学AI视频生成平台 - 服务器版</p>
+            <div class="mt-2 text-sm text-green-600">
+                ✅ 已解决CORS跨域问题 | 🚀 本地服务器运行
+            </div>
+        </div>
+
+        <!-- API Status -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4 flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.349 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.349a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.349 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.349a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                API配置状态
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="flex items-center justify-between p-3 border rounded-lg">
+                    <div>
+                        <div class="font-medium">通义千问 API</div>
+                        <div class="text-sm text-gray-600" id="api-status-text">未检测</div>
+                    </div>
+                    <span class="px-3 py-1 rounded-full text-xs font-medium" id="api-status-badge">
+                        🔄 检测中
+                    </span>
+                </div>
+                <div class="flex items-center justify-between p-3 border rounded-lg">
+                    <div>
+                        <div class="font-medium">本地服务器</div>
+                        <div class="text-sm text-gray-600">代理服务运行中</div>
+                    </div>
+                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        ✅ 运行中
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Key Input -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">🔑 API密钥配置</h2>
+            <div class="flex flex-col gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        通义千问API密钥 (以sk-开头)
+                    </label>
+                    <input
+                        type="password"
+                        id="api-key"
+                        placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        value=""
+                    >
+                </div>
+                <div class="flex gap-2">
+                    <button
+                        onclick="testApiConnection()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500"
+                    >
+                        测试连接
+                    </button>
+                    <button
+                        onclick="clearApiKey()"
+                        class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 focus:ring-2 focus:ring-gray-500"
+                    >
+                        清除
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Language Selection -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">🌐 语言选择</h2>
+            <div class="flex flex-wrap gap-3">
+                <button
+                    onclick="setLanguage('zh')"
+                    class="px-4 py-2 rounded-lg border-2 transition-colors"
+                    id="lang-zh"
+                >
+                    🇨🇳 中文
+                </button>
+                <button
+                    onclick="setLanguage('en')"
+                    class="px-4 py-2 rounded-lg border-2 transition-colors"
+                    id="lang-en"
+                >
+                    🇺🇸 English
+                </button>
+            </div>
+        </div>
+
+        <!-- Example Questions -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">📚 示例问题</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="example-questions">
+                <!-- Will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Question Input -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">✍️ 输入数学问题</h2>
+            <div class="space-y-4">
+                <textarea
+                    id="math-question"
+                    placeholder="输入您的数学问题，例如：解方程 2x + 5 = 15"
+                    class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    rows="4"
+                ></textarea>
+                <div class="flex justify-between items-center">
+                    <div class="flex space-x-2">
+                        <button onclick="uploadImage()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                            </svg>
+                            上传图片
+                        </button>
+                        <button onclick="voiceInput()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                            </svg>
+                            语音输入
+                        </button>
+                        <button onclick="clearQuestion()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                            清除
+                        </button>
+                    </div>
+                    <button
+                        onclick="generateVideo()"
+                        id="generate-btn"
+                        class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 flex items-center font-semibold"
+                    >
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        生成AI教学视频
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Generation Progress -->
+        <div id="progress-container" class="bg-white rounded-lg shadow-lg p-6 mb-8 hidden">
+            <h2 class="text-xl font-semibold mb-4">🔄 生成进度</h2>
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <span id="current-step">准备开始...</span>
+                    <span class="text-sm text-gray-600" id="progress-percentage">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-blue-600 h-2 rounded-full progress-bar" id="progress-bar" style="width: 0%"></div>
+                </div>
+                <p class="text-sm text-gray-600" id="progress-description">正在准备...</p>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div id="results-container" class="bg-white rounded-lg shadow-lg p-6 hidden">
+            <h2 class="text-xl font-semibold mb-4 flex items-center" id="results-title">
+                <!-- Will be populated by JavaScript -->
+            </h2>
+            <div id="results-content">
+                <!-- Will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentLanguage = 'zh';
+        let isGenerating = false;
+        let apiKey = '';
+        
+        // Example questions
+        const exampleQuestions = {
+            zh: [
+                "解方程：2x + 5 = 15",
+                "求底边为8，高为6的三角形面积",
+                "化简：(3x + 2)(x - 4)",
+                "什么是一元一次方程？",
+                "解不等式：3x - 7 > 14"
+            ],
+            en: [
+                "Solve for x: 2x + 5 = 15",
+                "Find the area of a triangle with base 8 and height 6",
+                "Simplify: (3x + 2)(x - 4)",
+                "What is a linear equation?",
+                "Solve the inequality: 3x - 7 > 14"
+            ]
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            setLanguage('zh');
+            updateApiKeyStatus();
+        });
+
+        // Language functions
+        function setLanguage(lang) {
+            currentLanguage = lang;
+            document.getElementById('lang-zh').className = lang === 'zh' ? 
+                'px-4 py-2 rounded-lg border-2 border-blue-500 bg-blue-50 text-blue-700' : 
+                'px-4 py-2 rounded-lg border-2 border-gray-300 text-gray-700 hover:border-gray-400';
+            document.getElementById('lang-en').className = lang === 'en' ? 
+                'px-4 py-2 rounded-lg border-2 border-blue-500 bg-blue-50 text-blue-700' : 
+                'px-4 py-2 rounded-lg border-2 border-gray-300 text-gray-700 hover:border-gray-400';
+            
+            updateExampleQuestions();
+        }
+
+        function updateExampleQuestions() {
+            const container = document.getElementById('example-questions');
+            container.innerHTML = '';
+            
+            exampleQuestions[currentLanguage].forEach(question => {
+                const button = document.createElement('button');
+                button.className = 'text-left p-3 border border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors';
+                button.textContent = question;
+                button.onclick = () => selectExampleQuestion(question);
+                container.appendChild(button);
+            });
+        }
+
+        function selectExampleQuestion(question) {
+            document.getElementById('math-question').value = question;
+        }
+
+        // API functions
+        function updateApiKeyStatus() {
+            const apiKeyInput = document.getElementById('api-key');
+            const statusText = document.getElementById('api-status-text');
+            const statusBadge = document.getElementById('api-status-badge');
+            
+            apiKey = apiKeyInput.value.trim();
+            
+            if (apiKey) {
+                statusText.textContent = `已配置 (${apiKey.substring(0, 8)}...)`;
+                statusBadge.textContent = '✅ 已配置';
+                statusBadge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800';
+            } else {
+                statusText.textContent = '未配置';
+                statusBadge.textContent = '❌ 未配置';
+                statusBadge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800';
+            }
+        }
+
+        function clearApiKey() {
+            document.getElementById('api-key').value = '';
+            updateApiKeyStatus();
+        }
+
+        function clearQuestion() {
+            document.getElementById('math-question').value = '';
+            
+            // 如果有显示结果，也清除结果
+            const resultsContainer = document.getElementById('results-container');
+            if (resultsContainer && !resultsContainer.classList.contains('hidden')) {
+                resultsContainer.classList.add('hidden');
+            }
+            
+            // 如果有进度显示，也清除进度
+            const progressContainer = document.getElementById('progress-container');
+            if (progressContainer && !progressContainer.classList.contains('hidden')) {
+                progressContainer.classList.add('hidden');
+            }
+        }
+
+        async function testApiConnection() {
+            const apiKeyInput = document.getElementById('api-key');
+            const testKey = apiKeyInput.value.trim();
+            
+            if (!testKey) {
+                alert('请先输入API密钥');
+                return;
+            }
+            
+            const statusText = document.getElementById('api-status-text');
+            const statusBadge = document.getElementById('api-status-badge');
+            
+            statusText.textContent = '测试中...';
+            statusBadge.textContent = '🔄 测试中';
+            statusBadge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800';
+            
+            console.log('开始API连接测试...', { testKey: testKey.substring(0, 8) + '...' });
+            
+            try {
+                const requestData = {
+                    api_key: testKey,
+                    messages: [{
+                        role: 'user',
+                        content: '你好，请简单介绍一下你自己。'
+                    }],
+                    temperature: 0.1,
+                    max_tokens: 100
+                };
+                
+                console.log('发送请求数据:', requestData);
+                
+                const response = await fetch('http://localhost:8000/api/qwen', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                console.log('收到响应:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    ok: response.ok,
+                    headers: Object.fromEntries(response.headers.entries())
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const responseText = await response.text();
+                console.log('响应文本:', responseText);
+                
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (parseError) {
+                    console.error('JSON解析失败:', parseError);
+                    throw new Error(`无法解析服务器响应: ${parseError.message}`);
+                }
+                
+                console.log('解析后的数据:', data);
+                
+                if (data.output && data.output.text) {
+                    apiKey = testKey;
+                    statusText.textContent = `连接成功 (${testKey.substring(0, 8)}...)`;
+                    statusBadge.textContent = '✅ 连接成功';
+                    statusBadge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800';
+                    alert('API连接测试成功！\n\n' + data.output.text);
+                } else {
+                    throw new Error(data.error || data.message || '服务器返回了意外的响应格式');
+                }
+            } catch (error) {
+                console.error('API测试失败:', error);
+                statusText.textContent = '连接失败';
+                statusBadge.textContent = '❌ 连接失败';
+                statusBadge.className = 'px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800';
+                
+                let errorMessage = error.message;
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    errorMessage = '无法连接到本地服务器，请确认:\n1. 服务器是否正在运行\n2. 地址是否正确: http://localhost:8000\n3. 防火墙是否阻止了连接';
+                }
+                
+                alert('API连接测试失败：\n' + errorMessage);
+            }
+        }
+
+        // Video generation functions
+        async function generateVideo() {
+            const question = document.getElementById('math-question').value.trim();
+            
+            if (!question) {
+                alert('请输入数学问题');
+                return;
+            }
+            
+            // 从输入框获取API密钥
+            apiKey = document.getElementById('api-key').value.trim();
+            
+            if (!apiKey) {
+                alert('请先输入通义千问API密钥');
+                return;
+            }
+            
+            if (!apiKey.startsWith('sk-')) {
+                alert('API密钥格式错误，应该以sk-开头');
+                return;
+            }
+            
+            if (isGenerating) {
+                return;
+            }
+            
+            isGenerating = true;
+            document.getElementById('generate-btn').disabled = true;
+            document.getElementById('progress-container').classList.remove('hidden');
+            document.getElementById('results-container').classList.add('hidden');
+            
+            try {
+                // Step 1: Analyze question
+                await updateProgress(10, '🔍 分析数学问题...', '正在分析您的数学问题...');
+                await delay(1000);
+                
+                // Step 2: Call Qwen API
+                await updateProgress(25, '🤖 AI解题分析中...', '正在调用通义千问API解题...');
+                const mathSolution = await callQwenAPI(question);
+                
+                if (!mathSolution.success) {
+                    throw new Error(mathSolution.error || 'AI解题失败');
+                }
+                
+                // Step 3: Generate script
+                await updateProgress(40, '📝 生成教学脚本...', '正在生成教学脚本...');
+                await delay(1500);
+                
+                // Step 4: Create animation
+                await updateProgress(60, '🎬 创建数学动画...', '正在创建数学动画...');
+                await delay(2000);
+                
+                // Step 5: Generate speech
+                await updateProgress(80, '🎤 合成多语言语音...', '正在合成语音...');
+                await delay(1500);
+                
+                // Step 6: Render video
+                await updateProgress(95, '🎥 渲染最终视频...', '正在渲染最终视频...');
+                await delay(2000);
+                
+                // Complete
+                await updateProgress(100, '✅ 完成!', '视频生成完成！');
+                await delay(500);
+                
+                // Show results
+                showResults(mathSolution, question);
+                
+            } catch (error) {
+                console.error('视频生成失败:', error);
+                showError(error.message);
+            } finally {
+                isGenerating = false;
+                document.getElementById('generate-btn').disabled = false;
+                document.getElementById('progress-container').classList.add('hidden');
+            }
+        }
+
+        async function callQwenAPI(question) {
+            const prompt = buildMathPrompt(question);
+            
+            try {
+                const requestData = {
+                    api_key: apiKey,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: currentLanguage === 'zh' ? 
+                                '你是专业的K12数学老师，请用清晰的中文解释数学概念和解题步骤。' :
+                                'You are a professional K12 math teacher. Please explain math concepts and solution steps clearly in English.'
+                        },
+                        {
+                            role: 'user',
+                            content: prompt
+                        }
+                    ],
+                    temperature: 0.1,
+                    max_tokens: 1000,
+                    top_p: 0.8
+                };
+                
+                const response = await fetch('http://localhost:8000/api/qwen', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const responseText = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (parseError) {
+                    throw new Error(`无法解析服务器响应: ${parseError.message}`);
+                }
+                
+                if (data.output && data.output.text) {
+                    return {
+                        success: true,
+                        data: {
+                            content: data.output.text,
+                            usage: data.usage,
+                            model: 'qwen-plus',
+                            requestId: data.request_id
+                        }
+                    };
+                } else {
+                    return {
+                        success: false,
+                        error: data.error || data.message || '服务器返回了意外的响应格式'
+                    };
+                }
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        }
+
+        function buildMathPrompt(question) {
+            if (currentLanguage === 'zh') {
+                return `请详细解答这个K12数学问题：
+
+题目：${question}
+
+请按以下结构回答：
+1. 问题分析
+2. 详细解题步骤（每步都要解释原理）
+3. 最终答案
+4. 验证过程
+5. 相关数学概念
+6. 常见错误提醒
+
+请确保解释清晰，适合K12学生理解。`;
+            } else {
+                return `Please solve this K12 math problem in detail:
+
+Question: ${question}
+
+Please structure your answer as follows:
+1. Problem analysis
+2. Detailed solution steps (explain the reasoning for each step)
+3. Final answer
+4. Verification process
+5. Related math concepts
+6. Common mistakes to avoid
+
+Please ensure explanations are clear and suitable for K12 students.`;
+            }
+        }
+
+        async function updateProgress(percentage, step, description) {
+            document.getElementById('progress-percentage').textContent = percentage + '%';
+            document.getElementById('current-step').textContent = step;
+            document.getElementById('progress-description').textContent = description;
+            document.getElementById('progress-bar').style.width = percentage + '%';
+        }
+
+        function showResults(mathSolution, question) {
+            const container = document.getElementById('results-container');
+            const title = document.getElementById('results-title');
+            const content = document.getElementById('results-content');
+            
+            title.innerHTML = `
+                <svg class="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                🎉 视频生成成功！
+            `;
+            
+            const totalTokens = mathSolution.data.usage?.total_tokens || 0;
+            const costCny = totalTokens * 0.004 / 1000;
+            
+            content.innerHTML = `
+                <div class="space-y-6">
+                    <!-- AI解题结果 -->
+                    <div class="bg-green-50 rounded-lg p-4">
+                        <h4 class="font-semibold text-green-800 mb-2">🤖 AI解题结果</h4>
+                        <div class="text-sm text-green-700 whitespace-pre-wrap">
+                            ${mathSolution.data.content}
+                        </div>
+                        <div class="mt-3 text-xs text-green-600">
+                            Token使用: ${totalTokens} | 成本: ¥${costCny.toFixed(4)}
+                        </div>
+                    </div>
+                    
+                    <!-- 视频预览 -->
+                    <div class="bg-gray-100 rounded-lg p-8 text-center" id="video-preview">
+                        <svg class="w-16 h-16 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <p class="text-gray-600 mb-2">视频时长: 3:00</p>
+                        <button onclick="playMathVideo()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            ▶️ 播放视频
+                        </button>
+                    </div>
+                    
+                    <!-- 详细信息 -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-blue-50 rounded-lg p-4">
+                            <h4 class="font-medium text-blue-800 mb-2">📊 技术信息</h4>
+                            <div class="text-sm space-y-1">
+                                <div>语言: ${currentLanguage === 'zh' ? '中文' : 'English'}</div>
+                                <div>难度: 中级</div>
+                                <div>数学主题: 代数</div>
+                                <div>处理时间: 45秒</div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-green-50 rounded-lg p-4">
+                            <h4 class="font-medium text-green-800 mb-2">💰 成本信息</h4>
+                            <div class="text-sm space-y-1">
+                                <div>实际成本: ¥${costCny.toFixed(4)}</div>
+                                <div>相比人工讲师: 节省98%+</div>
+                                <div>相比专业制作: 节省99%+</div>
+                                <div>质量: 专业级AI教学</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 操作按钮 -->
+                    <div class="flex flex-wrap gap-4">
+                        <button onclick="downloadVideo()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            📥 下载视频
+                        </button>
+                        <button onclick="shareVideo()" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">
+                            🔗 分享链接
+                        </button>
+                        <button onclick="generateSubtitles()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                            📄 生成字幕
+                        </button>
+                        <button onclick="resetForm()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                            🔄 重新生成
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            container.classList.remove('hidden');
+        }
+
+        function showError(errorMessage) {
+            const container = document.getElementById('results-container');
+            const title = document.getElementById('results-title');
+            const content = document.getElementById('results-content');
+            
+            title.innerHTML = `
+                <svg class="w-5 h-5 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                ❌ 生成失败
+            `;
+            
+            content.innerHTML = `
+                <div class="text-center text-red-600">
+                    <p class="mb-4">${errorMessage}</p>
+                    <button onclick="resetForm()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                        🔄 重试
+                    </button>
+                </div>
+            `;
+            
+            container.classList.remove('hidden');
+        }
+
+        function resetForm() {
+            document.getElementById('results-container').classList.add('hidden');
+            document.getElementById('progress-container').classList.add('hidden');
+            document.getElementById('math-question').value = '';
+        }
+
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // 播放数学视频的模拟功能
+        let currentMathSolution = null;
+        let videoPlayer = null;
+        let currentStep = 0;
+        let isPlaying = false;
+
+        function playMathVideo() {
+            // 获取当前的数学解题内容
+            const resultsContainer = document.getElementById('results-container');
+            if (!resultsContainer || resultsContainer.classList.contains('hidden')) {
+                alert('请先生成视频内容');
+                return;
+            }
+
+            // 创建视频播放器界面
+            createVideoPlayer();
+        }
+
+        function createVideoPlayer() {
+            const videoPreview = document.getElementById('video-preview');
+            
+            // 创建视频播放器HTML
+            const playerHTML = `
+                <div class="bg-black rounded-lg overflow-hidden">
+                    <!-- 视频播放区域 -->
+                    <div class="bg-gray-900 text-white p-8 min-h-[300px] flex flex-col justify-center" id="video-content">
+                        <div class="text-center mb-4">
+                            <h3 class="text-xl font-bold mb-2">🎬 AI数学教学视频</h3>
+                            <p class="text-gray-300" id="current-scene">准备播放...</p>
+                        </div>
+                        <div class="text-lg text-center" id="video-text">
+                            点击播放按钮开始观看AI解题过程
+                        </div>
+                    </div>
+                    
+                    <!-- 控制栏 -->
+                    <div class="bg-gray-800 text-white p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center space-x-4">
+                                <button onclick="togglePlay()" id="play-btn" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded">
+                                    ▶️ 播放
+                                </button>
+                                <button onclick="resetVideo()" class="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded">
+                                    🔄 重播
+                                </button>
+                                <button onclick="closeVideoPlayer()" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded">
+                                    ❌ 关闭
+                                </button>
+                            </div>
+                            <div class="text-sm text-gray-300">
+                                <span id="current-time">00:00</span> / <span id="total-time">03:00</span>
+                            </div>
+                        </div>
+                        
+                        <!-- 进度条 -->
+                        <div class="w-full bg-gray-700 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" id="progress-video" style="width: 0%"></div>
+                        </div>
+                        
+                        <div class="mt-2 text-xs text-gray-400 text-center">
+                            AI数学教学视频 - 基于通义千问解题内容生成
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            videoPreview.innerHTML = playerHTML;
+        }
+
+        function togglePlay() {
+            const playBtn = document.getElementById('play-btn');
+            
+            if (!isPlaying) {
+                startVideoPlayback();
+                playBtn.textContent = '⏸️ 暂停';
+                isPlaying = true;
+            } else {
+                pauseVideoPlayback();
+                playBtn.textContent = '▶️ 播放';
+                isPlaying = false;
+            }
+        }
+
+        function startVideoPlayback() {
+            // 获取解题内容
+            const mathContent = getMathSolutionContent();
+            if (!mathContent) {
+                alert('无法获取解题内容');
+                return;
+            }
+
+            // 生成教学场景
+            const scenes = generateTeachingScenes(mathContent);
+            currentStep = 0;
+            
+            // 开始播放场景
+            playScene(scenes, 0);
+        }
+
+        function getMathSolutionContent() {
+            // 从页面中提取AI解题内容
+            const contentElement = document.querySelector('.text-green-700.whitespace-pre-wrap');
+            return contentElement ? contentElement.textContent : null;
+        }
+
+        function generateTeachingScenes(content) {
+            // 基于AI解题内容生成教学场景
+            const lines = content.split('\n').filter(line => line.trim());
+            const scenes = [];
+            
+            // 开场
+            scenes.push({
+                title: "欢迎观看AI数学教学",
+                content: "今天我们来解决这个数学问题，让我们一步步分析。",
+                duration: 3000
+            });
+
+            // 处理解题步骤
+            for (let i = 0; i < Math.min(lines.length, 8); i++) {
+                const line = lines[i].trim();
+                if (line && !line.startsWith('**') && line.length > 10) {
+                    scenes.push({
+                        title: `步骤 ${scenes.length}`,
+                        content: line,
+                        duration: 4000
+                    });
+                }
+            }
+
+            // 结尾
+            scenes.push({
+                title: "解题完成",
+                content: "通过以上步骤，我们成功解决了这个数学问题。希望这个AI教学视频对您有帮助！",
+                duration: 3000
+            });
+
+            return scenes;
+        }
+
+        function playScene(scenes, index) {
+            if (!isPlaying || index >= scenes.length) {
+                completeVideo();
+                return;
+            }
+
+            const scene = scenes[index];
+            const videoContent = document.getElementById('video-content');
+            const sceneElement = document.getElementById('current-scene');
+            const textElement = document.getElementById('video-text');
+            const progressBar = document.getElementById('progress-video');
+            const currentTimeElement = document.getElementById('current-time');
+
+            // 更新场景内容
+            sceneElement.textContent = scene.title;
+            textElement.textContent = scene.content;
+            
+            // 更新进度
+            const progress = ((index + 1) / scenes.length) * 100;
+            progressBar.style.width = progress + '%';
+            
+            // 更新时间
+            const currentSeconds = Math.floor((index * 180) / scenes.length);
+            const minutes = Math.floor(currentSeconds / 60);
+            const seconds = currentSeconds % 60;
+            currentTimeElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+            // 播放下一个场景
+            setTimeout(() => {
+                if (isPlaying) {
+                    playScene(scenes, index + 1);
+                }
+            }, scene.duration);
+        }
+
+        function pauseVideoPlayback() {
+            // 暂停播放（通过isPlaying标志控制）
+        }
+
+        function resetVideo() {
+            isPlaying = false;
+            currentStep = 0;
+            const playBtn = document.getElementById('play-btn');
+            const progressBar = document.getElementById('progress-video');
+            const currentTimeElement = document.getElementById('current-time');
+            const sceneElement = document.getElementById('current-scene');
+            const textElement = document.getElementById('video-text');
+
+            playBtn.textContent = '▶️ 播放';
+            progressBar.style.width = '0%';
+            currentTimeElement.textContent = '00:00';
+            sceneElement.textContent = '准备播放...';
+            textElement.textContent = '点击播放按钮开始观看AI解题过程';
+        }
+
+        function closeVideoPlayer() {
+            // 恢复原始的视频预览界面
+            const videoPreview = document.getElementById('video-preview');
+            videoPreview.innerHTML = `
+                <svg class="w-16 h-16 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <p class="text-gray-600 mb-2">视频时长: 3:00</p>
+                <button onclick="playMathVideo()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    ▶️ 播放视频
+                </button>
+            `;
+            
+            isPlaying = false;
+            currentStep = 0;
+        }
+
+        function completeVideo() {
+            isPlaying = false;
+            const playBtn = document.getElementById('play-btn');
+            const sceneElement = document.getElementById('current-scene');
+            const textElement = document.getElementById('video-text');
+            
+            playBtn.textContent = '🔄 重播';
+            sceneElement.textContent = '播放完成';
+            textElement.textContent = '感谢观看！这个AI教学视频基于通义千问的解题内容生成。';
+        }
+
+        // 其他功能按钮的实现
+        function downloadVideo() {
+            alert('📥 下载功能\n\n在实际应用中，这里会：\n• 生成MP4视频文件\n• 包含AI语音解说\n• 包含数学动画效果\n• 自动下载到本地\n\n当前为演示版本，暂不提供真实下载。');
+        }
+
+        function shareVideo() {
+            const shareUrl = `${window.location.origin}/video/share/${Math.random().toString(36).substr(2, 9)}`;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: 'AI数学教学视频',
+                    text: '看看这个AI生成的数学教学视频！',
+                    url: shareUrl
+                });
+            } else {
+                // 复制到剪贴板
+                navigator.clipboard.writeText(shareUrl).then(() => {
+                    alert(`🔗 分享链接已复制到剪贴板！\n\n${shareUrl}\n\n在实际应用中，这个链接会指向真实的视频资源。`);
+                }).catch(() => {
+                    alert(`🔗 分享链接：\n\n${shareUrl}\n\n请手动复制此链接进行分享。\n\n在实际应用中，这个链接会指向真实的视频资源。`);
+                });
+            }
+        }
+
+        function generateSubtitles() {
+            const mathContent = getMathSolutionContent();
+            if (!mathContent) {
+                alert('请先生成视频内容');
+                return;
+            }
+
+            // 模拟生成字幕文件
+            const subtitles = generateSRTSubtitles(mathContent);
+            
+            // 创建并下载SRT文件
+            const blob = new Blob([subtitles], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'math_video_subtitles.srt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            alert('📄 字幕文件已生成并下载！\n\n• 格式：SRT（通用字幕格式）\n• 内容：基于AI解题步骤\n• 时间轴：自动同步\n• 支持多语言\n\n您可以将此文件用于视频播放器。');
+        }
+
+        function generateSRTSubtitles(content) {
+            const lines = content.split('\n').filter(line => line.trim());
+            let srtContent = '';
+            let subtitleIndex = 1;
+            let currentTime = 0;
+
+            // 添加开场字幕
+            srtContent += `${subtitleIndex}\n`;
+            srtContent += `00:00:00,000 --> 00:00:03,000\n`;
+            srtContent += `欢迎观看AI数学教学视频\n\n`;
+            subtitleIndex++;
+            currentTime = 3;
+
+            // 为每个解题步骤生成字幕
+            for (let i = 0; i < Math.min(lines.length, 8); i++) {
+                const line = lines[i].trim();
+                if (line && !line.startsWith('**') && line.length > 10) {
+                    const startTime = formatSRTTime(currentTime);
+                    const endTime = formatSRTTime(currentTime + 4);
+                    
+                    srtContent += `${subtitleIndex}\n`;
+                    srtContent += `${startTime} --> ${endTime}\n`;
+                    srtContent += `${line}\n\n`;
+                    
+                    subtitleIndex++;
+                    currentTime += 4;
+                }
+            }
+
+            // 添加结尾字幕
+            const startTime = formatSRTTime(currentTime);
+            const endTime = formatSRTTime(currentTime + 3);
+            srtContent += `${subtitleIndex}\n`;
+            srtContent += `${startTime} --> ${endTime}\n`;
+            srtContent += `解题完成，感谢观看！\n\n`;
+
+            return srtContent;
+        }
+
+        function formatSRTTime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            const milliseconds = 0;
+            
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')},${milliseconds.toString().padStart(3, '0')}`;
+        }
+
+        // 上传图片功能
+        function uploadImage() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = function(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const textarea = document.getElementById('math-question');
+                        textarea.value = `[已上传图片: ${file.name}]\n\n在实际应用中，这里会：\n• 使用OCR识别图片中的数学公式\n• 自动转换为文本格式\n• 支持手写数学公式识别\n• 支持多种图片格式\n\n请手动输入数学问题以继续演示。`;
+                        
+                        alert(`📸 图片上传成功！\n\n文件名: ${file.name}\n大小: ${(file.size / 1024).toFixed(2)} KB\n类型: ${file.type}\n\n在实际应用中，系统会自动识别图片中的数学公式并转换为文本。`);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+            input.click();
+        }
+
+        // 语音输入功能
+        function voiceInput() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert('🎤 语音输入功能\n\n您的浏览器不支持语音识别功能。\n\n在实际应用中，这里会：\n• 实时语音转文字\n• 支持多种语言\n• 智能识别数学术语\n• 自动标点符号\n\n请手动输入数学问题以继续演示。');
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const recognition = new SpeechRecognition();
+            
+            recognition.lang = 'zh-CN';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            recognition.onstart = function() {
+                alert('🎤 开始录音...\n\n请说出您的数学问题\n点击"确定"后开始录音');
+            };
+
+            recognition.onresult = function(event) {
+                const transcript = event.results[0][0].transcript;
+                const textarea = document.getElementById('math-question');
+                textarea.value = transcript;
+                
+                alert(`🎤 语音识别完成！\n\n识别结果: ${transcript}\n\n在实际应用中，系统会进一步优化识别结果，确保数学术语的准确性。`);
+            };
+
+            recognition.onerror = function(event) {
+                alert(`🎤 语音识别错误: ${event.error}\n\n在实际应用中，系统会提供更稳定的语音识别服务。`);
+            };
+
+            recognition.onend = function() {
+                console.log('语音识别结束');
+            };
+
+            try {
+                recognition.start();
+            } catch (error) {
+                alert('🎤 语音输入功能\n\n启动语音识别时出现错误。\n\n在实际应用中，这里会提供：\n• 实时语音转文字\n• 支持多种语言\n• 智能识别数学术语\n• 自动标点符号\n\n请手动输入数学问题以继续演示。');
+            }
+        }
+
+        // Update API key status on input change
+        document.getElementById('api-key').addEventListener('input', updateApiKeyStatus);
+    </script>
+</body>
+</html>

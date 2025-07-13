@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前端连接测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔧 前端连接测试</h1>
+    
+    <div class="test-section info">
+        <h3>📋 测试说明</h3>
+        <p>此页面用于测试前端到SDK服务器的连接是否正常。</p>
+    </div>
+
+    <div class="test-section">
+        <h3>🌐 连接测试</h3>
+        <button onclick="testConnection()">测试SDK服务器连接</button>
+        <button onclick="testQwenAPI()">测试QWEN API调用</button>
+        <div id="connectionResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>📊 测试结果</h3>
+        <pre id="testResults">等待测试...</pre>
+    </div>
+
+    <script>
+        async function testConnection() {
+            const resultDiv = document.getElementById('connectionResult');
+            const resultsDiv = document.getElementById('testResults');
+            
+            resultDiv.innerHTML = '<p>🔄 正在测试连接...</p>';
+            resultsDiv.textContent = '正在测试...';
+            
+            try {
+                console.log('🔍 开始测试SDK服务器连接...');
+                
+                // 测试OPTIONS请求
+                const optionsResponse = await fetch('http://127.0.0.1:8002/api/qwen', {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                console.log('📊 OPTIONS响应:', optionsResponse.status, optionsResponse.statusText);
+                
+                if (optionsResponse.ok) {
+                    resultDiv.innerHTML = '<p class="success">✅ 连接测试成功！</p>';
+                    resultsDiv.textContent = `OPTIONS请求成功: ${optionsResponse.status} ${optionsResponse.statusText}`;
+                } else {
+                    throw new Error(`OPTIONS请求失败: ${optionsResponse.status} ${optionsResponse.statusText}`);
+                }
+                
+            } catch (error) {
+                console.error('❌ 连接测试失败:', error);
+                resultDiv.innerHTML = '<p class="error">❌ 连接测试失败</p>';
+                resultsDiv.textContent = `连接错误: ${error.message}`;
+            }
+        }
+
+        async function testQwenAPI() {
+            const resultDiv = document.getElementById('connectionResult');
+            const resultsDiv = document.getElementById('testResults');
+            
+            resultDiv.innerHTML = '<p>🔄 正在测试API调用...</p>';
+            resultsDiv.textContent = '正在测试API调用...';
+            
+            try {
+                console.log('🔍 开始测试QWEN API调用...');
+                
+                const testData = {
+                    api_key: 'sk-1899f80e08854bdcbe0b3bc64b661ef4',
+                    messages: [
+                        {
+                            role: 'user',
+                            content: '请简单回答：2 + 3 = ?'
+                        }
+                    ],
+                    temperature: 0.1,
+                    max_tokens: 100
+                };
+                
+                console.log('📄 发送数据:', testData);
+                
+                const response = await fetch('http://127.0.0.1:8002/api/qwen', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(testData)
+                });
+                
+                console.log('📊 响应状态:', response.status, response.statusText);
+                console.log('📋 响应头:', Object.fromEntries(response.headers.entries()));
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+                }
+                
+                const data = await response.json();
+                console.log('✅ API调用成功:', data);
+                
+                resultDiv.innerHTML = '<p class="success">✅ API调用成功！</p>';
+                resultsDiv.textContent = `API调用成功:\n状态: ${response.status}\n响应: ${JSON.stringify(data, null, 2)}`;
+                
+            } catch (error) {
+                console.error('❌ API调用失败:', error);
+                resultDiv.innerHTML = '<p class="error">❌ API调用失败</p>';
+                resultsDiv.textContent = `API调用错误: ${error.message}\n\n详细错误信息:\n${error.stack}`;
+            }
+        }
+
+        // 页面加载时自动测试连接
+        window.onload = function() {
+            console.log('🚀 页面加载完成，开始自动测试...');
+            testConnection();
+        };
+    </script>
+</body>
+</html> 

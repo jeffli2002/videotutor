@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LaTeX清理测试</title>
+</head>
+<body>
+    <h1>LaTeX清理测试</h1>
+    
+    <div>
+        <h2>原始内容（包含LaTeX标记）：</h2>
+        <pre id="original" style="background: #f0f0f0; padding: 10px; border: 1px solid #ccc;"></pre>
+    </div>
+    
+    <div>
+        <h2>清理后的内容：</h2>
+        <pre id="cleaned" style="background: #e8f5e8; padding: 10px; border: 1px solid #4caf50;"></pre>
+    </div>
+    
+    <script>
+        // 清理LaTeX标记的函数
+        const cleanLatexMarkers = (text) => {
+            if (!text) return ''
+            
+            // 移除单个$符号（行内公式标记）
+            let cleaned = text.replace(/\$([^$]+)\$/g, '$1')
+            
+            // 移除双$$符号（块级公式标记）
+            cleaned = cleaned.replace(/\$\$([^$]+)\$\$/g, '$1')
+            
+            // 移除其他常见的LaTeX标记
+            cleaned = cleaned.replace(/\\[a-zA-Z]+/g, '') // 移除反斜杠命令
+            cleaned = cleaned.replace(/\{[^}]*\}/g, '') // 移除花括号内容
+            cleaned = cleaned.replace(/\\\(/g, '').replace(/\\\)/g, '') // 移除行内公式标记
+            cleaned = cleaned.replace(/\\\[/g, '').replace(/\\\]/g, '') // 移除块级公式标记
+            
+            // 清理多余的空格和换行
+            cleaned = cleaned.replace(/\s+/g, ' ').trim()
+            
+            return cleaned
+        }
+        
+        // 测试内容
+        const testContent = `**详细解题步骤**
+
+1. **步骤编号：1**  
+   **具体操作：移项**  
+   **详细解释：为了简化不等式，我们首先将常数项 -7 移到不等号右边，这样可以集中处理含有未知数的项。**  
+   **中间结果：**  
+   $$
+   3x - 7 > 14
+   $$  
+   将 -7 移到右边，变成 +7：  
+   $$
+   3x > 14 + 7
+   $$  
+   $$
+   3x > 21
+   $$
+
+2. **步骤编号：2**  
+   **具体操作：两边同时除以系数 3**  
+   **详细解释：为了求出 $ x $ 的值，我们需要消除 $ x $ 前面的系数 3。由于 3 是正数，不等号方向不变。**  
+   **中间结果：**  
+   $$
+   \\frac{3x}{3} > \\frac{21}{3}
+   $$  
+   $$
+   x > 7
+   $$
+
+---
+
+**最终答案**  
+不等式的解集为：  
+$$
+x > 7
+$$
+
+---
+
+**验证过程**  
+我们可以选择一个大于 7 的数代入原不等式进行验证，例如 $ x = 8 $：
+
+原不等式：  
+$$
+3x - 7 > 14
+$$  
+代入 $ x = 8 $：  
+$$
+3(8) - 7 = 24 - 7 = 17 > 14
+$$  
+成立，说明我们的解正确。`
+
+        // 显示结果
+        document.getElementById('original').textContent = testContent
+        document.getElementById('cleaned').textContent = cleanLatexMarkers(testContent)
+        
+        console.log('原始内容长度:', testContent.length)
+        console.log('清理后内容长度:', cleanLatexMarkers(testContent).length)
+    </script>
+</body>
+</html> 

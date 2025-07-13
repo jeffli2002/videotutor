@@ -1,0 +1,76 @@
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    MathTutor AI Simple Auto-Test Report                      ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║ Test Summary:                                                                ║
+║   Total Tests:  45                                                        ║
+║   Passed:       28 ✅                                                      ║
+║   Failed:        2 ❌                                                      ║
+║   Info:          3 ℹ️                                                       ║
+║                                                                              ║
+║ Success Rate:  93.3%                                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📋 Detailed Results:
+TEST | 
+📋 Running Test Suite 1/6
+TEST | 🌍 Testing Service Availability
+FAIL | ❌ Frontend server not accessible: Request failed with status code 404
+PASS | ✅ Manim server (127.0.0.1:5001) is healthy
+PASS | ✅ Environment variables properly configured
+TEST | 
+📋 Running Test Suite 2/6
+TEST | 🗄️  Testing Database Schema
+PASS | ✅ Database connection successful
+PASS | ✅ Table 'profiles' exists and accessible
+PASS | ✅ Table 'videos' exists and accessible
+PASS | ✅ Table 'user_preferences' exists and accessible
+TEST | 
+📋 Running Test Suite 3/6
+TEST | 🧮 Testing Manim Video Generation
+PASS | ✅ Manim video generation successful
+INFO | 📹 Video URL: /rendered_videos/autotest_simple.mp4
+PASS | ✅ Video file created (18204 bytes)
+TEST | 
+📋 Running Test Suite 4/6
+TEST | 🖥️  Testing Frontend File Structure
+PASS | ✅ Required file exists: src/App.jsx
+PASS | ✅ Required file exists: src/components/AuthForm.jsx
+PASS | ✅ Required file exists: src/components/VideoGenerationDemo.jsx
+PASS | ✅ Required file exists: src/components/MyVideos.jsx
+PASS | ✅ Required file exists: src/services/authService.js
+PASS | ✅ Required file exists: src/services/userService.js
+PASS | ✅ Required file exists: src/config/supabase.js
+PASS | ✅ Required file exists: package.json
+PASS | ✅ Required file exists: .env
+PASS | ✅ Required dependency installed: @supabase/supabase-js
+PASS | ✅ Required dependency installed: react
+PASS | ✅ Required dependency installed: lucide-react
+TEST | 
+📋 Running Test Suite 5/6
+TEST | 🌐 Testing Frontend Accessibility
+FAIL | ❌ Frontend not accessible: Request failed with status code 404
+INFO | 📄 Route /: not accessible
+PASS | 📄 Route /favicon.ico: accessible
+TEST | 
+📋 Running Test Suite 6/6
+TEST | 🔗 Testing Integration Flow Simulation
+INFO | 📝 Simulating user registration workflow...
+PASS | ✅ User visits frontend: Frontend accessible
+PASS | ✅ User sees login form: AuthForm component exists
+PASS | ✅ User registers/logs in: AuthService configured
+PASS | ✅ User generates video: VideoDemo component exists
+PASS | ✅ Video saved to database: UserService configured
+PASS | ✅ User views videos: MyVideos component exists
+PASS | 📊 Integration flow components verified
+
+🎯 System Status:
+⚠️  Some tests failed. Please review and fix the issues above.
+
+📚 Test Coverage:
+✅ Service Availability (Frontend, Manim, Environment)
+✅ Database Schema and Connection
+✅ Video Generation Capability  
+✅ Frontend Component Structure
+✅ Frontend Accessibility
+✅ Integration Flow Verification

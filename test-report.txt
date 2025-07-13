@@ -1,0 +1,70 @@
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    MathTutor AI Auto-Test Report                             ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║ Test Summary:                                                                ║
+║   Total Tests:  36                                                        ║
+║   Passed:       13 ✅                                                      ║
+║   Failed:        6 ❌                                                      ║
+║   Warnings:      0 ⚠️                                                       ║
+║                                                                              ║
+║ Success Rate:  36.1%                                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📋 Detailed Test Results:
+TEST | 
+📋 Running Test Suite 1/8
+TEST | 🌍 Testing Environment and Service Availability
+FAIL | ❌ Frontend server not accessible: connect ECONNREFUSED 127.0.0.1:5173
+TEST | 
+📋 Running Test Suite 2/8
+TEST | 🗄️  Testing Database Connection and Schema
+PASS | ✅ Database connection successful
+PASS | ✅ Table 'profiles' exists and accessible
+PASS | ✅ Table 'videos' exists and accessible
+PASS | ✅ Table 'user_preferences' exists and accessible
+TEST | 
+📋 Running Test Suite 3/8
+TEST | 🔐 Testing Authentication Service
+FAIL | ❌ Authentication test failed: Cannot find module '/mnt/d/AI/VideoTutor/src/config/supabase' imported from /mnt/d/AI/VideoTutor/src/services/authService.js
+TEST | 
+📋 Running Test Suite 4/8
+TEST | 👤 Testing User Service and Database Operations
+FAIL | ❌ User service test failed: Cannot find module '/mnt/d/AI/VideoTutor/src/config/supabase' imported from /mnt/d/AI/VideoTutor/src/services/userService.js
+TEST | 
+📋 Running Test Suite 5/8
+TEST | 🎬 Testing Video Generation and Storage
+FAIL | ❌ Video generation test failed: Cannot find module '/mnt/d/AI/VideoTutor/src/config/supabase' imported from /mnt/d/AI/VideoTutor/src/services/userService.js
+TEST | 
+📋 Running Test Suite 6/8
+TEST | 🧮 Testing Manim Server Integration
+PASS | ✅ Manim server health check passed
+PASS | ✅ Manim video generation successful
+INFO | 📹 Generated video URL: /rendered_videos/autotest_video.mp4
+TEST | 
+📋 Running Test Suite 7/8
+TEST | 🖥️  Testing Frontend Component Integration
+PASS | ✅ Frontend file exists: src/App.jsx
+PASS | ✅ Frontend file exists: src/components/AuthForm.jsx
+PASS | ✅ Frontend file exists: src/components/VideoGenerationDemo.jsx
+PASS | ✅ Frontend file exists: src/components/MyVideos.jsx
+PASS | ✅ Frontend file exists: src/services/authService.js
+PASS | ✅ Frontend file exists: src/services/userService.js
+PASS | ✅ Frontend file exists: src/config/supabase.js
+FAIL | ❌ Frontend application not properly accessible
+TEST | 
+📋 Running Test Suite 8/8
+TEST | 🧹 Cleaning up test data
+FAIL | ❌ Cleanup test failed: Cannot find module '/mnt/d/AI/VideoTutor/src/config/supabase' imported from /mnt/d/AI/VideoTutor/src/services/userService.js
+
+🎯 Test Categories Coverage:
+✅ Environment & Services
+✅ Database Connection & Schema  
+✅ User Authentication System
+✅ User Management Service
+✅ Video Generation & Storage
+✅ Manim Server Integration
+✅ Frontend Component Integration
+✅ Data Cleanup
+
+⚠️  Some tests failed. Please review the detailed results above and fix any issues.
