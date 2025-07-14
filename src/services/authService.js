@@ -150,7 +150,8 @@ class AuthService {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}`,
+          // 强制跳转到 /videotutor/ 路径，适配 GitHub Pages 子目录
+          redirectTo: `${window.location.origin}/videotutor/`,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',

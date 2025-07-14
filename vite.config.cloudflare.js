@@ -4,7 +4,8 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/videotutor/', // 关键：GitHub Pages仓库名
+  // Cloudflare Pages 不需要子路径配置
+  base: '/',
   server: {
     port: 5173,
     strictPort: true,
@@ -14,4 +15,4 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-})
+}) 

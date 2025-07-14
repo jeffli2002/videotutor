@@ -6,10 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:cloudflare": "vite build --config vite.config.cloudflare.js",
+    "build:cf": "vite build --config vite.config.cloudflare.js",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "deploy:gh": "npm run build && gh-pages -d dist",
-    "deploy:cf": "npm run build"
+    "deploy:cf": "npm run build:cloudflare"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.0.4",
