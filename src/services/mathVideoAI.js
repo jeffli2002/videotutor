@@ -623,15 +623,31 @@ export function buildManimScriptFromQwen(qwenSteps, sceneName = "MathSolutionSce
   // 对去重后的步骤进行智能优化，平衡内容完整性和渲染稳定性
   cleanedSteps = uniqueSteps.map(step => cleanTextForManim(step.content));
   
-  // 进一步优化步骤，确保渲染稳定性
+  // 进一步优化步骤，确保渲染稳定性和专业性
   cleanedSteps = cleanedSteps.map((step, index) => {
-    // 限制每个步骤的长度
-    if (step.length > 600) {
-      step = step.substring(0, 597) + "...";
+    // 智能长度控制，保持内容完整性
+    if (step.length > 800) {
+      // 尝试在句号处截断，保持语义完整
+      const sentences = step.split(/[。！？.!?]/);
+      let truncated = '';
+      for (const sentence of sentences) {
+        if ((truncated + sentence).length <= 797) {
+          truncated += sentence + '。';
+        } else {
+          break;
+        }
+      }
+      step = truncated || step.substring(0, 797) + "...";
     }
     
-    // 移除可能导致渲染问题的字符
+    // 移除可能导致渲染问题的字符，但保留数学符号
     step = step.replace(/[^\w\s\u4e00-\u9fff,.，。！？()（）=+\-*/÷×²³√π∞≤≥≠≈±∑∏∫∂∇∆∈∉⊂⊃∪∩∅∀∃]/g, '');
+    
+    // 确保步骤内容专业且完整
+    if (step.length < 20) {
+      // 如果步骤太短，尝试补充内容
+      step = `步骤${index + 1}: ${step}`;
+    }
     
     return step;
   });
@@ -702,23 +718,28 @@ class ${sceneName}(Scene):
                 try:
                     print(f"渲染步骤 {i+1}/{max_steps}: {step_text[:40]}...")
                     
-                    # 步骤编号
-                    step_num = Text(f"步骤 {i+1}", font_size=20, color=RED)
-                    step_num.next_to(title, DOWN, buff=0.8)
+                    # 步骤编号 - 更专业的样式
+                    step_num = Text(f"步骤 {i+1}", font_size=24, color=BLUE, weight=BOLD)
+                    step_num.next_to(title, DOWN, buff=1.0)
                     
                     # 步骤内容 - 优化的文本处理
                     step_content = self.create_step_content(step_text, step_num)
                     
                     # 淡出前一个步骤
                     if previous_text:
-                        self.play(FadeOut(previous_text), run_time=0.5)
+                        self.play(FadeOut(previous_text), run_time=0.6)
                     
-                    # 显示新步骤
-                    self.play(Write(step_num), run_time=0.8)
-                    self.play(Write(step_content), run_time=1.0)
+                    # 显示新步骤 - 更专业的动画
+                    self.play(Write(step_num), run_time=1.0)
+                    self.play(Write(step_content), run_time=1.2)
                     
-                    # 优化的等待时间
-                    wait_time = min(max(6.0, len(step_text) * 0.08), 15.0)  # 6-15秒
+                    # 智能等待时间，根据内容长度和复杂度调整
+                    base_wait = 8.0  # 基础等待时间
+                    content_factor = len(step_text) * 0.06  # 内容长度因子
+                    complexity_factor = step_text.count('=') * 0.5  # 数学公式复杂度因子
+                    wait_time = min(max(base_wait, content_factor + complexity_factor), 20.0)
+                    
+                    print(f"步骤 {i+1} 等待时间: {wait_time:.1f}秒")
                     self.wait(wait_time)
                     
                     previous_text = VGroup(step_num, step_content)
@@ -749,20 +770,20 @@ class ${sceneName}(Scene):
         try:
             # 清理文本
             text = text.strip()
-            if len(text) > 400:
-                text = text[:397] + "..."
+            if len(text) > 600:
+                text = text[:597] + "..."
             
             # 按长度选择显示策略
-            if len(text) <= 60:
+            if len(text) <= 80:
                 # 短文本直接显示
-                return Text(text, font_size=16, color=BLACK).next_to(step_num, DOWN, buff=0.4)
+                return Text(text, font_size=18, color=BLACK, weight=NORMAL).next_to(step_num, DOWN, buff=0.5)
             else:
                 # 长文本分行显示
                 return self.create_multiline_text(text, step_num)
                 
         except Exception as e:
             print(f"创建步骤内容失败: {e}")
-            return Text("步骤内容", font_size=14, color=BLACK).next_to(step_num, DOWN, buff=0.4)
+            return Text("步骤内容", font_size=16, color=BLACK).next_to(step_num, DOWN, buff=0.5)
     
     def create_multiline_text(self, text, step_num):
         """创建多行文本"""
@@ -776,18 +797,24 @@ class ${sceneName}(Scene):
             # 创建文本组
             text_group = VGroup()
             current_y = 0
-            max_lines = 12  # 限制最大行数
+            max_lines = 15  # 增加最大行数，提高内容显示能力
             
             for sentence in sentences:
                 if current_y >= max_lines:
                     break
                     
-                # 分行处理
-                if len(sentence) > 50:
+                # 分行处理 - 更智能的分行策略
+                if len(sentence) > 60:
                     lines = []
-                    while len(sentence) > 50 and current_y < max_lines:
-                        lines.append(sentence[:50])
-                        sentence = sentence[50:]
+                    while len(sentence) > 60 and current_y < max_lines:
+                        # 尝试在合适的位置分行
+                        break_point = 60
+                        for i in range(55, min(65, len(sentence))):
+                            if sentence[i] in ['，', ',', ' ', '=']:
+                                break_point = i + 1
+                                break
+                        lines.append(sentence[:break_point])
+                        sentence = sentence[break_point:]
                         current_y += 1
                     if sentence and current_y < max_lines:
                         lines.append(sentence)
@@ -796,18 +823,18 @@ class ${sceneName}(Scene):
                     lines = [sentence]
                     current_y += 1
                 
-                # 创建文本对象
+                # 创建文本对象 - 更专业的样式
                 for line in lines:
                     if current_y <= max_lines:
-                        line_text = Text(line, font_size=12, color=BLACK)
-                        line_text.next_to(step_num, DOWN, buff=0.4 + (current_y - 1) * 0.3)
+                        line_text = Text(line, font_size=14, color=BLACK, weight=NORMAL)
+                        line_text.next_to(step_num, DOWN, buff=0.5 + (current_y - 1) * 0.35)
                         text_group.add(line_text)
             
             return text_group
             
         except Exception as e:
             print(f"创建多行文本失败: {e}")
-            return Text(text[:50] + "...", font_size=12, color=BLACK).next_to(step_num, DOWN, buff=0.4)
+            return Text(text[:80] + "...", font_size=14, color=BLACK).next_to(step_num, DOWN, buff=0.5)
 `
   return script;
 }
@@ -841,9 +868,9 @@ function cleanTextForManim(text) {
     text = text.replace(/\n\s*\n/g, '\n');
     
     // 智能长度控制 - 根据内容类型调整
-    const maxLength = 800; // 降低最大长度，提高渲染稳定性
+    const maxLength = 1000; // 增加最大长度，提高内容完整性
     if (text.length > maxLength) {
-      // 尝试在句号处截断
+      // 尝试在句号处截断，保持语义完整
       const sentences = text.split(/[。！？.!?]/);
       let truncated = '';
       for (const sentence of sentences) {
@@ -968,8 +995,18 @@ function optimizeStepsForManim(steps) {
     let optimized = step;
     
     // 1. 限制单步内容长度，避免过长的文本
-    if (optimized.length > 500) {
-      optimized = optimized.substring(0, 497) + "...";
+    if (optimized.length > 800) {
+      // 智能截断，保持语义完整
+      const sentences = optimized.split(/[。！？.!?]/);
+      let truncated = '';
+      for (const sentence of sentences) {
+        if ((truncated + sentence).length <= 797) {
+          truncated += sentence + '。';
+        } else {
+          break;
+        }
+      }
+      optimized = truncated || optimized.substring(0, 797) + "...";
     }
     
     // 2. 移除可能导致渲染问题的特殊字符
