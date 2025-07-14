@@ -199,6 +199,9 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
       }
       
       if (detailBlock) {
+        console.log('🔍 开始提取详细解题步骤块内容...')
+        console.log('📝 详细解题步骤块:', detailBlock.substring(0, 500) + '...')
+        
         // 提取编号步骤，支持多种格式：1. 1、 1) 等，并包含多行内容
         const numberedPatterns = [
           // 匹配带**的格式：1. **标题** 内容
@@ -211,10 +214,12 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
         
         for (const pattern of numberedPatterns) {
           const matches = [...detailBlock.matchAll(pattern)]
+          console.log(`🔍 正则表达式匹配结果:`, matches.length, '个匹配')
+          
           if (matches && matches.length > 0) {
             // 保持原始顺序，按编号排序
             const stepMap = new Map()
-            matches.forEach(match => {
+            matches.forEach((match, index) => {
               const stepNum = parseInt(match[1])
               let stepContent = ''
               
@@ -227,6 +232,8 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
                 stepContent = match[2].trim()
               }
               
+              console.log(`📝 步骤 ${stepNum}:`, stepContent.substring(0, 100) + '...')
+              
               // 如果这个编号还没有内容，或者新内容更长，则更新
               if (stepContent && (!stepMap.has(stepNum) || stepContent.length > stepMap.get(stepNum).length)) {
                 stepMap.set(stepNum, stepContent)
@@ -237,6 +244,8 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
             steps = Array.from(stepMap.keys())
               .sort((a, b) => a - b)
               .map(num => stepMap.get(num))
+            
+            console.log('✅ 成功提取步骤:', steps.length, '个步骤')
             break
           }
         }
@@ -371,15 +380,37 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
         console.log('✅ 兜底段落提取:', steps)
       }
       
-      // 4. 如果还是没有有效步骤，使用备用步骤
+      // 4. 如果还是没有有效步骤，尝试从AI内容中提取更详细的步骤
       if (steps.length < 2) {
-        steps = [
-          "分析题目条件",
-          "列出方程",
-          "移项求解", 
-          "计算得出结果",
-          "验证答案"
-        ]
+        console.log('🔄 尝试从AI内容中提取详细步骤...')
+        
+        // 从AI内容中提取有意义的段落作为步骤
+        const contentLines = aiContent.split('\n')
+          .map(s => s.trim())
+          .filter(s => s.length > 20 && 
+            !s.startsWith('**') && 
+            !s.startsWith('问题分析') &&
+            !s.startsWith('最终答案') &&
+            !s.startsWith('验证过程') &&
+            !s.startsWith('相关数学概念') &&
+            !s.startsWith('常见错误提醒') &&
+            !s.startsWith('---'))
+        
+        // 选择最长的几个段落作为步骤
+        const sortedLines = contentLines.sort((a, b) => b.length - a.length)
+        steps = sortedLines.slice(0, 5)
+        
+        // 如果还是没有足够的步骤，使用备用步骤
+        if (steps.length < 2) {
+          steps = [
+            "分析题目条件",
+            "列出方程",
+            "移项求解", 
+            "计算得出结果",
+            "验证答案"
+          ]
+        }
+        
         console.log('🔄 使用备用步骤:', steps)
       }
       
