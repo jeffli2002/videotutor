@@ -201,8 +201,11 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
       if (detailBlock) {
         // 提取编号步骤，支持多种格式：1. 1、 1) 等，并包含多行内容
         const numberedPatterns = [
-          /(\d+)[.、\)]\s*\*\*([^*]+)\*\*[\s\S]*?(?=\d+[.、\)]|$)/g,
+          // 匹配带**的格式：1. **标题** 内容
+          /(\d+)[.、\)]\s*\*\*([^*]+)\*\*\s*([^\n]+(?:\n(?!\d+[.、\)])[^\n]*)*)/g,
+          // 匹配普通格式：1. 标题 内容
           /(\d+)[.、\)]\s*([^\n]+(?:\n(?!\d+[.、\)])[^\n]*)*)/g,
+          // 匹配简单格式：1. 标题
           /(\d+)\s*[.、\)]\s*([^\n]+)/g
         ]
         
@@ -213,15 +216,19 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
             const stepMap = new Map()
             matches.forEach(match => {
               const stepNum = parseInt(match[1])
-              let stepContent = match[2].trim()
+              let stepContent = ''
               
-              // 如果匹配到的是标题格式（**标题**），提取标题内容
-              if (stepContent.startsWith('**') && stepContent.endsWith('**')) {
-                stepContent = stepContent.replace(/\*\*/g, '')
+              // 根据匹配组数量确定内容位置
+              if (match.length >= 4) {
+                // 带**的格式：match[2]是标题，match[3]是内容
+                stepContent = `**${match[2]}** ${match[3] || ''}`.trim()
+              } else if (match.length >= 3) {
+                // 普通格式：match[2]是内容
+                stepContent = match[2].trim()
               }
               
               // 如果这个编号还没有内容，或者新内容更长，则更新
-              if (!stepMap.has(stepNum) || stepContent.length > stepMap.get(stepNum).length) {
+              if (stepContent && (!stepMap.has(stepNum) || stepContent.length > stepMap.get(stepNum).length)) {
                 stepMap.set(stepNum, stepContent)
               }
             })
@@ -230,8 +237,6 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
             steps = Array.from(stepMap.keys())
               .sort((a, b) => a - b)
               .map(num => stepMap.get(num))
-            
-            console.log('✅ 提取编号步骤（保持顺序）:', steps)
             break
           }
         }
