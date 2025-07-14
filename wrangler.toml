@@ -1,5 +1,5 @@
 [build]
-command = "npm run build:cloudflare"
+command = "npm run build:cf"
 cwd = "."
 
 [build.environment]
