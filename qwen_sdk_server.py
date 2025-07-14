@@ -95,13 +95,19 @@ class QWENSDKHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 
                 # 分块发送响应数据，避免连接中断
-                chunk_size = 1024
+                chunk_size = 512  # 减小块大小
                 try:
                     for i in range(0, len(response_data), chunk_size):
                         chunk = response_data[i:i + chunk_size]
                         try:
                             self.wfile.write(chunk)
                             self.wfile.flush()
+                            # 添加小延迟，避免发送过快
+                            import time
+                            time.sleep(0.001)
+                        except (ConnectionAbortedError, BrokenPipeError) as conn_err:
+                            print(f"❌ 连接中断: {conn_err}")
+                            break
                         except Exception as write_err:
                             print(f"❌ 发送响应数据失败: {write_err}")
                             break
@@ -136,8 +142,12 @@ class QWENSDKHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 try:
                     self.wfile.write(json.dumps(error_result).encode('utf-8'))
+                except (ConnectionAbortedError, BrokenPipeError) as conn_err:
+                    print(f"❌ 发送错误响应时连接中断: {conn_err}")
                 except Exception as send_error:
                     print(f"❌ 发送错误响应失败: {str(send_error)}")
+            except (ConnectionAbortedError, BrokenPipeError) as conn_err:
+                print(f"❌ 发送错误响应头时连接中断: {conn_err}")
             except Exception as send_error:
                 print(f"❌ 发送错误响应头失败: {str(send_error)}")
 
