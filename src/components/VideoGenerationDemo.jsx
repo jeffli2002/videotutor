@@ -204,10 +204,10 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
         
         // 提取编号步骤，支持多种格式：1. 1、 1) 等，并包含多行内容
         const numberedPatterns = [
-          // 匹配带**的格式：1. **标题** 内容
-          /(\d+)[.、\)]\s*\*\*([^*]+)\*\*\s*([^\n]+(?:\n(?!\d+[.、\)])[^\n]*)*)/g,
-          // 匹配普通格式：1. 标题 内容
-          /(\d+)[.、\)]\s*([^\n]+(?:\n(?!\d+[.、\)])[^\n]*)*)/g,
+          // 匹配带**的格式：1. **标题** 内容（包含多行详细内容）
+          /(\d+)[.、\)]\s*\*\*([^*]+)\*\*\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|$)/g,
+          // 匹配普通格式：1. 标题 内容（包含多行详细内容）
+          /(\d+)[.、\)]\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|$)/g,
           // 匹配简单格式：1. 标题
           /(\d+)\s*[.、\)]\s*([^\n]+)/g
         ]
@@ -226,13 +226,18 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
               // 根据匹配组数量确定内容位置
               if (match.length >= 4) {
                 // 带**的格式：match[2]是标题，match[3]是内容
-                stepContent = `**${match[2]}** ${match[3] || ''}`.trim()
+                const title = match[2].trim()
+                const content = (match[3] || '').trim()
+                stepContent = `**${title}** ${content}`.trim()
               } else if (match.length >= 3) {
                 // 普通格式：match[2]是内容
                 stepContent = match[2].trim()
               }
               
-              console.log(`📝 步骤 ${stepNum}:`, stepContent.substring(0, 100) + '...')
+              // 清理内容，移除多余的换行和空格
+              stepContent = stepContent.replace(/\n\s*\n/g, '\n').trim()
+              
+              console.log(`📝 步骤 ${stepNum}:`, stepContent.substring(0, 200) + '...')
               
               // 如果这个编号还没有内容，或者新内容更长，则更新
               if (stepContent && (!stepMap.has(stepNum) || stepContent.length > stepMap.get(stepNum).length)) {
@@ -328,7 +333,10 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
           console.log('✅ 全局提取加粗步骤标题（保持顺序）:', steps)
         } else {
           const numberedPatterns = [
-            /(\d+)[.、\)]\s*([^\n]+(?:\n(?!\d+[.、\)])[^\n]*)*)/g,
+            // 匹配带**的格式：1. **标题** 内容（包含多行详细内容）
+            /(\d+)[.、\)]\s*\*\*([^*]+)\*\*\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|$)/g,
+            // 匹配普通格式：1. 标题 内容（包含多行详细内容）
+            /(\d+)[.、\)]\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|$)/g,
             /(\d+)\s*[.、\)]\s*([^\n]+)/g
           ]
           
@@ -339,12 +347,21 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
               const stepMap = new Map()
               matches.forEach(match => {
                 const stepNum = parseInt(match[1])
-                let stepContent = match[2].trim()
+                let stepContent = ''
                 
-                // 如果匹配到的是标题格式（**标题**），提取标题内容
-                if (stepContent.startsWith('**') && stepContent.endsWith('**')) {
-                  stepContent = stepContent.replace(/\*\*/g, '')
+                // 根据匹配组数量确定内容位置
+                if (match.length >= 4) {
+                  // 带**的格式：match[2]是标题，match[3]是内容
+                  const title = match[2].trim()
+                  const content = (match[3] || '').trim()
+                  stepContent = `**${title}** ${content}`.trim()
+                } else if (match.length >= 3) {
+                  // 普通格式：match[2]是内容
+                  stepContent = match[2].trim()
                 }
+                
+                // 清理内容，移除多余的换行和空格
+                stepContent = stepContent.replace(/\n\s*\n/g, '\n').trim()
                 
                 // 如果这个编号还没有内容，或者新内容更长，则更新
                 if (!stepMap.has(stepNum) || stepContent.length > stepMap.get(stepNum).length) {

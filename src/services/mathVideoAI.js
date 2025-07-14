@@ -673,7 +673,7 @@ class ${sceneName}(Scene):
                 step_num.next_to(title, DOWN, buff=1)
                 
                 # 步骤内容 - 智能处理长文本，确保完整显示
-                if len(step_text) > 100:
+                if len(step_text) > 80:
                     # 按标点符号分句，更智能的分割
                     import re
                     sentences = re.split(r'[。！？；;.!?]', step_text)
@@ -684,31 +684,31 @@ class ${sceneName}(Scene):
                     current_y = 0
                     
                     for j, sentence in enumerate(sentences):
-                        if len(sentence) > 50:
+                        if len(sentence) > 60:
                             # 长句子按字数分行，增加每行字数
                             words = []
-                            while len(sentence) > 50:
-                                words.append(sentence[:50])
-                                sentence = sentence[50:]
+                            while len(sentence) > 60:
+                                words.append(sentence[:60])
+                                sentence = sentence[60:]
                             if sentence:
                                 words.append(sentence)
                         else:
                             words = [sentence]
                         
                         for k, word in enumerate(words):
-                            line_text = Text(word, font_size=14, color=BLACK)
-                            line_text.next_to(step_num, DOWN, buff=0.5 + current_y * 0.4)
+                            line_text = Text(word, font_size=12, color=BLACK)
+                            line_text.next_to(step_num, DOWN, buff=0.5 + current_y * 0.35)
                             step_content.add(line_text)
                             current_y += 1
                             
-                            # 限制最大行数，避免超出屏幕
-                            if current_y > 15:
+                            # 增加最大行数，确保完整显示
+                            if current_y > 20:
                                 break
-                        if current_y > 15:
+                        if current_y > 20:
                             break
                 else:
                     # 短文本正常显示
-                    step_content = Text(step_text, font_size=16, color=BLACK, line_spacing=1.2)
+                    step_content = Text(step_text, font_size=14, color=BLACK, line_spacing=1.2)
                     step_content.next_to(step_num, DOWN, buff=0.5)
                 
                 # 淡出前一个步骤
@@ -720,7 +720,7 @@ class ${sceneName}(Scene):
                 self.play(Write(step_content), run_time=1.5)
                 
                 # 根据内容长度调整等待时间，确保用户能看清完整步骤
-                wait_time = max(8.0, len(step_text) * 0.1)  # 至少8秒，每字符0.1秒
+                wait_time = max(10.0, len(step_text) * 0.15)  # 至少10秒，每字符0.15秒
                 self.wait(wait_time)  # 动态等待时间，让用户看清完整步骤
                 
                 previous_text = VGroup(step_num, step_content)
@@ -757,9 +757,9 @@ function cleanTextForManim(text) {
   text = text.replace(/[ \t]+/g, ' ').trim();
   
   // 保留完整内容，大幅增加长度限制
-  // 只在超过1000字符时才截断，确保完整显示解题步骤
-  if (text.length > 1000) {
-    text = text.substring(0, 997) + "...";
+  // 只在超过2000字符时才截断，确保完整显示解题步骤
+  if (text.length > 2000) {
+    text = text.substring(0, 1997) + "...";
   }
   
   return text;
