@@ -201,6 +201,7 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
       if (detailBlock) {
         // 提取编号步骤，支持多种格式：1. 1、 1) 等，并包含多行内容
         const numberedPatterns = [
+          /(\d+)[.、\)]\s*\*\*([^*]+)\*\*[\s\S]*?(?=\d+[.、\)]|$)/g,
           /(\d+)[.、\)]\s*([^\n]+(?:\n(?!\d+[.、\)])[^\n]*)*)/g,
           /(\d+)\s*[.、\)]\s*([^\n]+)/g
         ]
@@ -212,7 +213,13 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
             const stepMap = new Map()
             matches.forEach(match => {
               const stepNum = parseInt(match[1])
-              const stepContent = match[2].trim()
+              let stepContent = match[2].trim()
+              
+              // 如果匹配到的是标题格式（**标题**），提取标题内容
+              if (stepContent.startsWith('**') && stepContent.endsWith('**')) {
+                stepContent = stepContent.replace(/\*\*/g, '')
+              }
+              
               // 如果这个编号还没有内容，或者新内容更长，则更新
               if (!stepMap.has(stepNum) || stepContent.length > stepMap.get(stepNum).length) {
                 stepMap.set(stepNum, stepContent)
@@ -231,70 +238,114 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
         
         // 如果没有编号，尝试提取多行步骤内容
         if (steps.length === 0) {
-          // 按行分割，过滤掉标题和空行
-          const lines = detailBlock.split('\n')
-            .map(s => s.trim())
-            .filter(s => s.length > 10 && 
-              !s.startsWith('**') && 
-              !s.startsWith('详细解题步骤') && 
-              !s.startsWith('解题步骤') &&
-              !s.startsWith('步骤') &&
-              !s.startsWith('问题分析') &&
-              !s.startsWith('最终答案') &&
-              !s.startsWith('验证过程'))
+          // 尝试提取带**的步骤标题
+          const boldStepPattern = /(\d+)[.、\)]\s*\*\*([^*]+)\*\*/g
+          const boldMatches = [...detailBlock.matchAll(boldStepPattern)]
           
-          // 合并短行，形成完整步骤
-          const mergedSteps = []
-          let currentStep = ''
-          
-          for (const line of lines) {
-            if (line.length > 20) {
-              if (currentStep) {
-                mergedSteps.push(currentStep.trim())
+          if (boldMatches && boldMatches.length > 0) {
+            const stepMap = new Map()
+            boldMatches.forEach(match => {
+              const stepNum = parseInt(match[1])
+              const stepTitle = match[2].trim()
+              stepMap.set(stepNum, stepTitle)
+            })
+            
+            steps = Array.from(stepMap.keys())
+              .sort((a, b) => a - b)
+              .map(num => stepMap.get(num))
+            
+            console.log('✅ 提取加粗步骤标题（保持顺序）:', steps)
+          } else {
+            // 按行分割，过滤掉标题和空行
+            const lines = detailBlock.split('\n')
+              .map(s => s.trim())
+              .filter(s => s.length > 10 && 
+                !s.startsWith('**') && 
+                !s.startsWith('详细解题步骤') && 
+                !s.startsWith('解题步骤') &&
+                !s.startsWith('步骤') &&
+                !s.startsWith('问题分析') &&
+                !s.startsWith('最终答案') &&
+                !s.startsWith('验证过程'))
+            
+            // 合并短行，形成完整步骤
+            const mergedSteps = []
+            let currentStep = ''
+            
+            for (const line of lines) {
+              if (line.length > 20) {
+                if (currentStep) {
+                  mergedSteps.push(currentStep.trim())
+                }
+                currentStep = line
+              } else if (currentStep) {
+                currentStep += ' ' + line
               }
-              currentStep = line
-            } else if (currentStep) {
-              currentStep += ' ' + line
             }
+            
+            if (currentStep) {
+              mergedSteps.push(currentStep.trim())
+            }
+            
+            steps = mergedSteps.slice(0, 8) // 增加最大步骤数
+            console.log('✅ 按段落提取步骤（保持顺序）:', steps)
           }
-          
-          if (currentStep) {
-            mergedSteps.push(currentStep.trim())
-          }
-          
-          steps = mergedSteps.slice(0, 8) // 增加最大步骤数
-          console.log('✅ 按段落提取步骤（保持顺序）:', steps)
         }
       }
       
       // 2. 如果还没有，尝试全局编号提取，保持顺序
       if (steps.length === 0) {
-        const numberedPatterns = [
-          /(\d+)[.、\)]\s*([^\n]+(?:\n(?!\d+[.、\)])[^\n]*)*)/g,
-          /(\d+)\s*[.、\)]\s*([^\n]+)/g
-        ]
+        // 首先尝试提取带**的步骤标题
+        const boldStepPattern = /(\d+)[.、\)]\s*\*\*([^*]+)\*\*/g
+        const boldMatches = [...aiContent.matchAll(boldStepPattern)]
         
-        for (const pattern of numberedPatterns) {
-          const matches = [...aiContent.matchAll(pattern)]
-          if (matches && matches.length > 0) {
-            // 保持原始顺序，按编号排序
-            const stepMap = new Map()
-            matches.forEach(match => {
-              const stepNum = parseInt(match[1])
-              const stepContent = match[2].trim()
-              // 如果这个编号还没有内容，或者新内容更长，则更新
-              if (!stepMap.has(stepNum) || stepContent.length > stepMap.get(stepNum).length) {
-                stepMap.set(stepNum, stepContent)
-              }
-            })
-            
-            // 按编号顺序重建步骤数组
-            steps = Array.from(stepMap.keys())
-              .sort((a, b) => a - b)
-              .map(num => stepMap.get(num))
-            
-            console.log('✅ 全局编号提取（保持顺序）:', steps)
-            break
+        if (boldMatches && boldMatches.length > 0) {
+          const stepMap = new Map()
+          boldMatches.forEach(match => {
+            const stepNum = parseInt(match[1])
+            const stepTitle = match[2].trim()
+            stepMap.set(stepNum, stepTitle)
+          })
+          
+          steps = Array.from(stepMap.keys())
+            .sort((a, b) => a - b)
+            .map(num => stepMap.get(num))
+          
+          console.log('✅ 全局提取加粗步骤标题（保持顺序）:', steps)
+        } else {
+          const numberedPatterns = [
+            /(\d+)[.、\)]\s*([^\n]+(?:\n(?!\d+[.、\)])[^\n]*)*)/g,
+            /(\d+)\s*[.、\)]\s*([^\n]+)/g
+          ]
+          
+          for (const pattern of numberedPatterns) {
+            const matches = [...aiContent.matchAll(pattern)]
+            if (matches && matches.length > 0) {
+              // 保持原始顺序，按编号排序
+              const stepMap = new Map()
+              matches.forEach(match => {
+                const stepNum = parseInt(match[1])
+                let stepContent = match[2].trim()
+                
+                // 如果匹配到的是标题格式（**标题**），提取标题内容
+                if (stepContent.startsWith('**') && stepContent.endsWith('**')) {
+                  stepContent = stepContent.replace(/\*\*/g, '')
+                }
+                
+                // 如果这个编号还没有内容，或者新内容更长，则更新
+                if (!stepMap.has(stepNum) || stepContent.length > stepMap.get(stepNum).length) {
+                  stepMap.set(stepNum, stepContent)
+                }
+              })
+              
+              // 按编号顺序重建步骤数组
+              steps = Array.from(stepMap.keys())
+                .sort((a, b) => a - b)
+                .map(num => stepMap.get(num))
+              
+              console.log('✅ 全局编号提取（保持顺序）:', steps)
+              break
+            }
           }
         }
       }
