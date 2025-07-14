@@ -1,3 +1,13 @@
+import { getConfig } from './environment.js';
+
+// 环境配置
+const config = getConfig();
+
+// API配置
+export const API_BASE_URL = config.apiBaseUrl;
+export const QWEN_API_URL = config.qwenApiUrl;
+export const QWEN_API_KEY = import.meta.env.VITE_QWEN_API_KEY || '';
+
 // 环境变量配置模板
 export const API_CONFIG = {
   // 必需的API密钥 - 请在.env文件中配置

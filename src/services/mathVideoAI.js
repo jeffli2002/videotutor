@@ -598,34 +598,38 @@ export function buildManimScriptFromQwen(qwenSteps, sceneName = "MathSolutionSce
   console.log('🎬 开始构建Manim脚本，原始步骤:', qwenSteps)
   
   // 清理和限制步骤，严格保持原始顺序
-  const maxSteps = 10; // 增加最大步骤数
+  const maxSteps = 8; // 限制最大步骤数，避免重复
   let cleanedSteps = qwenSteps
     .filter(step => step && step.trim())
     .map((step, index) => ({
-      content: cleanTextForManim(step.trim()),
+      content: step.trim(), // 先保留原始内容
       originalIndex: index
     }))
-    .filter(step => step.content.length > 0 && step.content.length < 300) // 增加长度限制，允许更详细内容
-    .slice(0, maxSteps)
-    .map(step => step.content); // 只保留内容，但顺序已保持
+    .filter(step => step.content.length > 0) // 只过滤空内容
+    .slice(0, maxSteps); // 限制步骤数量
 
-  // 步骤去重，保持顺序
+  // 步骤去重，保持顺序，使用更智能的去重逻辑
   const uniqueSteps = [];
   const seen = new Set();
   for (const step of cleanedSteps) {
-    if (!seen.has(step)) {
+    // 提取步骤的关键内容（前50个字符）用于去重判断
+    const keyContent = step.content.substring(0, 50).trim();
+    if (!seen.has(keyContent)) {
       uniqueSteps.push(step);
-      seen.add(step);
+      seen.add(keyContent);
     }
   }
-  cleanedSteps = uniqueSteps;
+  
+  // 现在对去重后的步骤进行清理
+  cleanedSteps = uniqueSteps.map(step => cleanTextForManim(step.content));
 
   console.log('🧹 清理后的步骤（去重后顺序）:', cleanedSteps)
   console.log('📊 步骤数量:', cleanedSteps.length)
   
-  // 验证步骤顺序
+  // 验证步骤顺序和内容
   for (let i = 0; i < cleanedSteps.length; i++) {
-    console.log(`Manim步骤 ${i + 1}: ${cleanedSteps[i]}`)
+    console.log(`Manim步骤 ${i + 1}: ${cleanedSteps[i].substring(0, 100)}${cleanedSteps[i].length > 100 ? '...' : ''}`)
+    console.log(`步骤 ${i + 1} 完整内容长度: ${cleanedSteps[i].length} 字符`)
   }
 
   // 如果步骤太少，自动补充基础步骤
@@ -668,34 +672,38 @@ class ${sceneName}(Scene):
                 step_num = Text(f"步骤 {i+1}", font_size=24, color=RED)
                 step_num.next_to(title, DOWN, buff=1)
                 
-                # 步骤内容 - 支持长文本自动换行和分页显示
-                if len(step_text) > 50:
-                    # 按标点和字数分页
+                # 步骤内容 - 智能处理长文本
+                if len(step_text) > 80:
+                    # 按标点符号分句
                     import re
-                    lines = re.split(r'[。！？；;.!?]', step_text)
-                    lines = [l.strip() for l in lines if l.strip()]
-                    # 再按每行30字切分
-                    final_lines = []
-                    for line in lines:
-                        while len(line) > 30:
-                            final_lines.append(line[:30])
-                            line = line.slice(30)
-                        if line:
-                            final_lines.append(line)
-                    # 创建多行文本
+                    sentences = re.split(r'[。！？；;.!?]', step_text)
+                    sentences = [s.strip() for s in sentences if s.strip()]
+                    
+                    # 创建多行文本组
                     step_content = VGroup()
-                    for j, line in enumerate(final_lines):
-                        line_text = Text(line, font_size=14, color=BLACK)
-                        line_text.next_to(step_num, DOWN, buff=0.5 + j * 0.4)
-                        step_content.add(line_text)
+                    current_y = 0
+                    
+                    for j, sentence in enumerate(sentences):
+                        if len(sentence) > 40:
+                            # 长句子按字数分行
+                            words = []
+                            while len(sentence) > 40:
+                                words.append(sentence[:40])
+                                sentence = sentence[40:]
+                            if sentence:
+                                words.append(sentence)
+                        else:
+                            words = [sentence]
+                        
+                        for k, word in enumerate(words):
+                            line_text = Text(word, font_size=14, color=BLACK)
+                            line_text.next_to(step_num, DOWN, buff=0.5 + current_y * 0.35)
+                            step_content.add(line_text)
+                            current_y += 1
                 else:
                     # 短文本正常显示
                     step_content = Text(step_text, font_size=16, color=BLACK, line_spacing=1.2)
                     step_content.next_to(step_num, DOWN, buff=0.5)
-                
-                # 如果内容太长，自动调整位置
-                if len(step_text) > 100 and not isinstance(step_content, VGroup):
-                    step_content.scale(0.9)
                 
                 # 淡出前一个步骤
                 if previous_text:
@@ -706,7 +714,7 @@ class ${sceneName}(Scene):
                 self.play(Write(step_content), run_time=1.5)
                 
                 # 根据内容长度调整等待时间
-                wait_time = max(4.0, len(step_text) * 0.1)  # 至少4秒，每字符0.1秒
+                wait_time = max(6.0, len(step_text) * 0.08)  # 至少6秒，每字符0.08秒
                 self.wait(wait_time)  # 动态等待时间，让用户看清完整步骤
                 
                 previous_text = VGroup(step_num, step_content)
@@ -737,22 +745,14 @@ function cleanTextForManim(text) {
   text = text.replace(/[^ - - - \w\s\u4e00-\u9fff,.，。！？()（）=+\-*/÷×²³√π∞≤≥≠≈±∑∏∫∂∇∆∈∉⊂⊃∪∩∅∀∃]/g, '');
   // 移除多余空格
   text = text.replace(/\s+/g, ' ').trim();
-  // 自动按标点和字数插入换行符
-  let result = '';
-  let count = 0;
-  for (let i = 0; i < text.length; i++) {
-    result += text[i];
-    count++;
-    if (/[。！？；;.!?]/.test(text[i]) || count >= 20) {
-      result += '\n';
-      count = 0;
-    }
+  
+  // 保留完整内容，不强制截断
+  // 只在必要时限制长度（超过500字符才截断）
+  if (text.length > 500) {
+    text = text.substring(0, 497) + "...";
   }
-  // 限制长度
-  if (result.length > 250) {
-    result = result.substring(0, 247) + "...";
-  }
-  return result;
+  
+  return text;
 }
 
 /**
