@@ -39,7 +39,7 @@ def manim_render():
     try:
         logger.info("开始执行manim渲染...")
         result = subprocess.run([
-            "manim", script_path, scene_name, "-o", f"{output_name}.mp4", "-qk"
+            "manim", script_path, scene_name, "-o", f"{output_name}.mp4", "-qh"
         ], check=True, timeout=300, capture_output=True, text=True)
         logger.info(f"Manim渲染成功: {result.stdout}")
     except subprocess.TimeoutExpired:
@@ -54,11 +54,33 @@ def manim_render():
 
     # 自动查找分段mp4并合成
     try:
-        # 假设分段mp4在 media/videos/{output_name}/2160p60/partial_movie_files/{scene_name}/ 下
-        part_dir = os.path.join("media", "videos", output_name, "2160p60", "partial_movie_files", scene_name)
-        if not os.path.exists(part_dir):
-            logger.error(f"未找到分段视频目录: {part_dir}")
-            return jsonify({'success': False, 'error': f'未找到分段视频目录: {part_dir}'}), 500
+        # 查找分段mp4目录，支持多种分辨率
+        possible_dirs = [
+            os.path.join("media", "videos", output_name, "2160p60", "partial_movie_files", scene_name),
+            os.path.join("media", "videos", output_name, "1080p60", "partial_movie_files", scene_name),
+            os.path.join("media", "videos", output_name, "1080p30", "partial_movie_files", scene_name),
+            os.path.join("media", "videos", output_name, "720p30", "partial_movie_files", scene_name)
+        ]
+        
+        part_dir = None
+        for dir_path in possible_dirs:
+            if os.path.exists(dir_path):
+                part_dir = dir_path
+                logger.info(f"找到分段视频目录: {part_dir}")
+                break
+        
+        if not part_dir:
+            logger.error(f"未找到分段视频目录，尝试过的路径: {possible_dirs}")
+            # 检查media/videos目录是否存在
+            media_videos_dir = os.path.join("media", "videos", output_name)
+            if os.path.exists(media_videos_dir):
+                logger.info(f"media/videos目录存在: {media_videos_dir}")
+                # 列出该目录下的所有子目录
+                subdirs = [d for d in os.listdir(media_videos_dir) if os.path.isdir(os.path.join(media_videos_dir, d))]
+                logger.info(f"找到的子目录: {subdirs}")
+            else:
+                logger.error(f"media/videos目录不存在: {media_videos_dir}")
+            return jsonify({'success': False, 'error': f'未找到分段视频目录: {possible_dirs}'}), 500
         part_files = sorted(glob.glob(os.path.join(part_dir, "*.mp4")))
         # 可选：如需自定义排序规则，可在此处实现
         # part_files = sorted(part_files, key=自定义排序函数)
