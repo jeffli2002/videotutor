@@ -204,9 +204,9 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
         
         // 提取编号步骤，支持多种格式：1. 1、 1) 等，并包含多行内容
         const numberedPatterns = [
-          // 匹配带**的格式：1. **标题** 内容（包含多行详细内容）
+          // 匹配带**的格式：1. **标题** 内容（包含多行详细内容，包括数学公式）
           /(\d+)[.、\)]\s*\*\*([^*]+)\*\*\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|$)/g,
-          // 匹配普通格式：1. 标题 内容（包含多行详细内容）
+          // 匹配普通格式：1. 标题 内容（包含多行详细内容，包括数学公式）
           /(\d+)[.、\)]\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|$)/g,
           // 匹配简单格式：1. 标题
           /(\d+)\s*[.、\)]\s*([^\n]+)/g
@@ -275,39 +275,58 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
             
             console.log('✅ 提取加粗步骤标题（保持顺序）:', steps)
           } else {
-            // 按行分割，过滤掉标题和空行
-            const lines = detailBlock.split('\n')
-              .map(s => s.trim())
-              .filter(s => s.length > 10 && 
-                !s.startsWith('**') && 
-                !s.startsWith('详细解题步骤') && 
-                !s.startsWith('解题步骤') &&
-                !s.startsWith('步骤') &&
-                !s.startsWith('问题分析') &&
-                !s.startsWith('最终答案') &&
-                !s.startsWith('验证过程'))
+            // 尝试更智能的步骤提取：按编号分割内容
+            const stepSections = detailBlock.split(/(?=\n\s*\d+[.、\)])/g)
+            const extractedSteps = []
             
-            // 合并短行，形成完整步骤
-            const mergedSteps = []
-            let currentStep = ''
-            
-            for (const line of lines) {
-              if (line.length > 20) {
-                if (currentStep) {
-                  mergedSteps.push(currentStep.trim())
+            for (const section of stepSections) {
+              if (section.trim()) {
+                // 移除开头的编号和多余空白
+                const cleanSection = section.replace(/^\s*\d+[.、\)]\s*/, '').trim()
+                if (cleanSection.length > 10) {
+                  extractedSteps.push(cleanSection)
                 }
-                currentStep = line
-              } else if (currentStep) {
-                currentStep += ' ' + line
               }
             }
             
-            if (currentStep) {
-              mergedSteps.push(currentStep.trim())
+            if (extractedSteps.length > 0) {
+              steps = extractedSteps.slice(0, 8)
+              console.log('✅ 智能分割步骤（保持顺序）:', steps)
+            } else {
+              // 按行分割，过滤掉标题和空行
+              const lines = detailBlock.split('\n')
+                .map(s => s.trim())
+                .filter(s => s.length > 10 && 
+                  !s.startsWith('**') && 
+                  !s.startsWith('详细解题步骤') && 
+                  !s.startsWith('解题步骤') &&
+                  !s.startsWith('步骤') &&
+                  !s.startsWith('问题分析') &&
+                  !s.startsWith('最终答案') &&
+                  !s.startsWith('验证过程'))
+              
+              // 合并短行，形成完整步骤
+              const mergedSteps = []
+              let currentStep = ''
+              
+              for (const line of lines) {
+                if (line.length > 20) {
+                  if (currentStep) {
+                    mergedSteps.push(currentStep.trim())
+                  }
+                  currentStep = line
+                } else if (currentStep) {
+                  currentStep += ' ' + line
+                }
+              }
+              
+              if (currentStep) {
+                mergedSteps.push(currentStep.trim())
+              }
+              
+              steps = mergedSteps.slice(0, 8) // 增加最大步骤数
+              console.log('✅ 按段落提取步骤（保持顺序）:', steps)
             }
-            
-            steps = mergedSteps.slice(0, 8) // 增加最大步骤数
-            console.log('✅ 按段落提取步骤（保持顺序）:', steps)
           }
         }
       }
@@ -333,9 +352,9 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
           console.log('✅ 全局提取加粗步骤标题（保持顺序）:', steps)
         } else {
           const numberedPatterns = [
-            // 匹配带**的格式：1. **标题** 内容（包含多行详细内容）
+            // 匹配带**的格式：1. **标题** 内容（包含多行详细内容，包括数学公式）
             /(\d+)[.、\)]\s*\*\*([^*]+)\*\*\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|$)/g,
-            // 匹配普通格式：1. 标题 内容（包含多行详细内容）
+            // 匹配普通格式：1. 标题 内容（包含多行详细内容，包括数学公式）
             /(\d+)[.、\)]\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|$)/g,
             /(\d+)\s*[.、\)]\s*([^\n]+)/g
           ]
@@ -381,20 +400,46 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
         }
       }
       
-      // 3. 如果还没有，按段落分割过滤标题
+      // 3. 如果还没有，尝试智能分割整个内容
       if (steps.length === 0) {
-        const paragraphs = aiContent.split('\n')
-          .map(p => p.trim())
-          .filter(p => p && p.length > 15 && 
-            !p.startsWith('**') && 
-            !p.startsWith('题目：') && 
-            !p.startsWith('问题分析：') && 
-            !p.startsWith('最终答案：') && 
-            !p.startsWith('验证过程：') && 
-            !p.startsWith('相关数学概念：') &&
-            !p.startsWith('常见错误'))
-        steps = paragraphs.slice(0, 8) // 增加最大步骤数
-        console.log('✅ 兜底段落提取:', steps)
+        // 尝试按编号分割整个AI内容
+        const stepSections = aiContent.split(/(?=\n\s*\d+[.、\)])/g)
+        const extractedSteps = []
+        
+        for (const section of stepSections) {
+          if (section.trim()) {
+            // 移除开头的编号和多余空白
+            const cleanSection = section.replace(/^\s*\d+[.、\)]\s*/, '').trim()
+            if (cleanSection.length > 15 && 
+                !cleanSection.startsWith('**问题分析**') && 
+                !cleanSection.startsWith('**详细解题步骤**') && 
+                !cleanSection.startsWith('**最终答案**') && 
+                !cleanSection.startsWith('**验证过程**') && 
+                !cleanSection.startsWith('**相关数学概念**') && 
+                !cleanSection.startsWith('**常见错误')) {
+              extractedSteps.push(cleanSection)
+            }
+          }
+        }
+        
+        if (extractedSteps.length > 0) {
+          steps = extractedSteps.slice(0, 8)
+          console.log('✅ 全局智能分割步骤（保持顺序）:', steps)
+        } else {
+          // 按段落分割过滤标题
+          const paragraphs = aiContent.split('\n')
+            .map(p => p.trim())
+            .filter(p => p && p.length > 15 && 
+              !p.startsWith('**') && 
+              !p.startsWith('题目：') && 
+              !p.startsWith('问题分析：') && 
+              !p.startsWith('最终答案：') && 
+              !p.startsWith('验证过程：') && 
+              !p.startsWith('相关数学概念：') &&
+              !p.startsWith('常见错误'))
+          steps = paragraphs.slice(0, 8) // 增加最大步骤数
+          console.log('✅ 兜底段落提取:', steps)
+        }
       }
       
       // 4. 如果还是没有有效步骤，尝试从AI内容中提取更详细的步骤
