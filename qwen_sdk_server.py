@@ -96,12 +96,18 @@ class QWENSDKHandler(BaseHTTPRequestHandler):
                 
                 # 分块发送响应数据，避免连接中断
                 chunk_size = 1024
-                for i in range(0, len(response_data), chunk_size):
-                    chunk = response_data[i:i + chunk_size]
-                    self.wfile.write(chunk)
-                    self.wfile.flush()
-                
-                print(f"📤 响应发送完成，数据长度: {len(response_data)}")
+                try:
+                    for i in range(0, len(response_data), chunk_size):
+                        chunk = response_data[i:i + chunk_size]
+                        try:
+                            self.wfile.write(chunk)
+                            self.wfile.flush()
+                        except Exception as write_err:
+                            print(f"❌ 发送响应数据失败: {write_err}")
+                            break
+                    print(f"📤 响应发送完成，数据长度: {len(response_data)}")
+                except Exception as send_err:
+                    print(f"❌ 整体发送响应失败: {send_err}")
                 
             else:
                 # 返回错误响应
@@ -128,9 +134,12 @@ class QWENSDKHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-Type', 'application/json')
                 self.send_cors_headers()
                 self.end_headers()
-                self.wfile.write(json.dumps(error_result).encode('utf-8'))
+                try:
+                    self.wfile.write(json.dumps(error_result).encode('utf-8'))
+                except Exception as send_error:
+                    print(f"❌ 发送错误响应失败: {str(send_error)}")
             except Exception as send_error:
-                print(f"❌ 发送错误响应失败: {str(send_error)}")
+                print(f"❌ 发送错误响应头失败: {str(send_error)}")
 
 def run_sdk_server():
     port = 8002
