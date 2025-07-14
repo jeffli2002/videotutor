@@ -620,8 +620,28 @@ export function buildManimScriptFromQwen(qwenSteps, sceneName = "MathSolutionSce
     }
   }
   
-  // 对去重后的步骤进行适度清理，保留完整内容
+  // 对去重后的步骤进行智能优化，平衡内容完整性和渲染稳定性
   cleanedSteps = uniqueSteps.map(step => cleanTextForManim(step.content));
+  
+  // 进一步优化步骤，确保渲染稳定性
+  cleanedSteps = cleanedSteps.map((step, index) => {
+    // 限制每个步骤的长度
+    if (step.length > 600) {
+      step = step.substring(0, 597) + "...";
+    }
+    
+    // 移除可能导致渲染问题的字符
+    step = step.replace(/[^\w\s\u4e00-\u9fff,.，。！？()（）=+\-*/÷×²³√π∞≤≥≠≈±∑∏∫∂∇∆∈∉⊂⊃∪∩∅∀∃]/g, '');
+    
+    return step;
+  });
+  
+  // 限制总步骤数，避免渲染过久
+  const maxStepCount = 6;
+  if (cleanedSteps.length > maxStepCount) {
+    console.log(`📊 步骤数量过多 (${cleanedSteps.length})，截取前${maxStepCount}个步骤`);
+    cleanedSteps = cleanedSteps.slice(0, maxStepCount);
+  }
 
   console.log('🧹 清理后的步骤（去重后顺序）:', cleanedSteps)
   console.log('📊 步骤数量:', cleanedSteps.length)
@@ -645,96 +665,149 @@ export function buildManimScriptFromQwen(qwenSteps, sceneName = "MathSolutionSce
   }
   // 转换步骤为Python列表格式
   const stepsStr = JSON.stringify(cleanedSteps);
-  // 生成优化的Manim代码
+  // 生成优化的Manim代码 - 增强稳定性和性能
   const script = `from manim import *
 import warnings
+import sys
+import traceback
 warnings.filterwarnings("ignore")
+
+# 设置渲染配置，提高稳定性
+config.frame_rate = 30
+config.pixel_height = 1080
+config.pixel_width = 1920
+config.background_color = WHITE
 
 class ${sceneName}(Scene):
     def construct(self):
-        self.camera.background_color = WHITE
-        
-        # 标题
-        title = Text("AI数学解答", font_size=36, color=BLUE).to_edge(UP)
-        self.play(Write(title), run_time=1)
-        self.wait(0.5)
-        
-        # 显示步骤
-        steps = ${stepsStr}
-        print(f"Manim渲染步骤数量: {len(steps)}")
-        
-        previous_text = None
-        for i, step_text in enumerate(steps):
-            try:
-                print(f"渲染步骤 {i+1}: {step_text[:50]}...")
-                
-                # 步骤编号
-                step_num = Text(f"步骤 {i+1}", font_size=24, color=RED)
-                step_num.next_to(title, DOWN, buff=1)
-                
-                # 步骤内容 - 智能处理长文本，确保完整显示
-                if len(step_text) > 80:
-                    # 按标点符号分句，更智能的分割
-                    import re
-                    sentences = re.split(r'[。！？；;.!?]', step_text)
-                    sentences = [s.strip() for s in sentences if s.strip()]
+        try:
+            # 设置场景属性
+            self.camera.background_color = WHITE
+            
+            # 标题
+            title = Text("AI数学解答", font_size=32, color=BLUE).to_edge(UP)
+            self.play(Write(title), run_time=0.8)
+            self.wait(0.3)
+            
+            # 显示步骤
+            steps = ${stepsStr}
+            print(f"Manim渲染步骤数量: {len(steps)}")
+            
+            # 限制最大步骤数，避免渲染过久
+            max_steps = min(len(steps), 8)
+            steps = steps[:max_steps]
+            
+            previous_text = None
+            for i, step_text in enumerate(steps):
+                try:
+                    print(f"渲染步骤 {i+1}/{max_steps}: {step_text[:40]}...")
                     
-                    # 创建多行文本组
-                    step_content = VGroup()
-                    current_y = 0
+                    # 步骤编号
+                    step_num = Text(f"步骤 {i+1}", font_size=20, color=RED)
+                    step_num.next_to(title, DOWN, buff=0.8)
                     
-                    for j, sentence in enumerate(sentences):
-                        if len(sentence) > 60:
-                            # 长句子按字数分行，增加每行字数
-                            words = []
-                            while len(sentence) > 60:
-                                words.append(sentence[:60])
-                                sentence = sentence[60:]
-                            if sentence:
-                                words.append(sentence)
-                        else:
-                            words = [sentence]
-                        
-                        for k, word in enumerate(words):
-                            line_text = Text(word, font_size=12, color=BLACK)
-                            line_text.next_to(step_num, DOWN, buff=0.5 + current_y * 0.35)
-                            step_content.add(line_text)
-                            current_y += 1
-                            
-                            # 增加最大行数，确保完整显示
-                            if current_y > 20:
-                                break
-                        if current_y > 20:
-                            break
+                    # 步骤内容 - 优化的文本处理
+                    step_content = self.create_step_content(step_text, step_num)
+                    
+                    # 淡出前一个步骤
+                    if previous_text:
+                        self.play(FadeOut(previous_text), run_time=0.5)
+                    
+                    # 显示新步骤
+                    self.play(Write(step_num), run_time=0.8)
+                    self.play(Write(step_content), run_time=1.0)
+                    
+                    # 优化的等待时间
+                    wait_time = min(max(6.0, len(step_text) * 0.08), 15.0)  # 6-15秒
+                    self.wait(wait_time)
+                    
+                    previous_text = VGroup(step_num, step_content)
+                    
+                except Exception as e:
+                    print(f"步骤 {i+1} 渲染失败: {e}")
+                    traceback.print_exc()
+                    continue
+            
+            # 结束文本
+            if previous_text:
+                self.play(FadeOut(previous_text), run_time=0.5)
+            
+            end_text = Text("解答完成!", font_size=28, color=GREEN)
+            self.play(Write(end_text), run_time=0.8)
+            self.wait(1.5)
+            
+        except Exception as e:
+            print(f"场景渲染失败: {e}")
+            traceback.print_exc()
+            # 显示错误信息
+            error_text = Text("渲染完成", font_size=24, color=BLACK)
+            self.play(Write(error_text), run_time=1)
+            self.wait(2)
+    
+    def create_step_content(self, text, step_num):
+        """创建步骤内容，优化文本显示"""
+        try:
+            # 清理文本
+            text = text.strip()
+            if len(text) > 400:
+                text = text[:397] + "..."
+            
+            # 按长度选择显示策略
+            if len(text) <= 60:
+                # 短文本直接显示
+                return Text(text, font_size=16, color=BLACK).next_to(step_num, DOWN, buff=0.4)
+            else:
+                # 长文本分行显示
+                return self.create_multiline_text(text, step_num)
+                
+        except Exception as e:
+            print(f"创建步骤内容失败: {e}")
+            return Text("步骤内容", font_size=14, color=BLACK).next_to(step_num, DOWN, buff=0.4)
+    
+    def create_multiline_text(self, text, step_num):
+        """创建多行文本"""
+        try:
+            import re
+            
+            # 按标点符号分句
+            sentences = re.split(r'[。！？；;.!?]', text)
+            sentences = [s.strip() for s in sentences if s.strip()]
+            
+            # 创建文本组
+            text_group = VGroup()
+            current_y = 0
+            max_lines = 12  # 限制最大行数
+            
+            for sentence in sentences:
+                if current_y >= max_lines:
+                    break
+                    
+                # 分行处理
+                if len(sentence) > 50:
+                    lines = []
+                    while len(sentence) > 50 and current_y < max_lines:
+                        lines.append(sentence[:50])
+                        sentence = sentence[50:]
+                        current_y += 1
+                    if sentence and current_y < max_lines:
+                        lines.append(sentence)
+                        current_y += 1
                 else:
-                    # 短文本正常显示
-                    step_content = Text(step_text, font_size=14, color=BLACK, line_spacing=1.2)
-                    step_content.next_to(step_num, DOWN, buff=0.5)
+                    lines = [sentence]
+                    current_y += 1
                 
-                # 淡出前一个步骤
-                if previous_text:
-                    self.play(FadeOut(previous_text), run_time=0.8)
-                
-                # 显示新步骤
-                self.play(Write(step_num), run_time=1.2)
-                self.play(Write(step_content), run_time=1.5)
-                
-                # 根据内容长度调整等待时间，确保用户能看清完整步骤
-                wait_time = max(10.0, len(step_text) * 0.15)  # 至少10秒，每字符0.15秒
-                self.wait(wait_time)  # 动态等待时间，让用户看清完整步骤
-                
-                previous_text = VGroup(step_num, step_content)
-                
-            except Exception as e:
-                print(f"跳过步骤 {i+1}: {e}")
-                continue
-        
-        # 结束文本
-        end_text = Text("解答完成!", font_size=32, color=GREEN)
-        if previous_text:
-            self.play(FadeOut(previous_text), run_time=0.5)
-        self.play(Write(end_text), run_time=1)
-        self.wait(2)
+                # 创建文本对象
+                for line in lines:
+                    if current_y <= max_lines:
+                        line_text = Text(line, font_size=12, color=BLACK)
+                        line_text.next_to(step_num, DOWN, buff=0.4 + (current_y - 1) * 0.3)
+                        text_group.add(line_text)
+            
+            return text_group
+            
+        except Exception as e:
+            print(f"创建多行文本失败: {e}")
+            return Text(text[:50] + "...", font_size=12, color=BLACK).next_to(step_num, DOWN, buff=0.4)
 `
   return script;
 }
@@ -745,24 +818,50 @@ class ${sceneName}(Scene):
  * @returns {string} - 清理后的文本
  */
 function cleanTextForManim(text) {
-  // 移除markdown标记，但保留内容
-  text = text.replace(/\*\*/g, ''); // 移除加粗标记
-  text = text.replace(/`/g, ''); // 移除代码标记
-  text = text.replace(/^#+\s*/g, ''); // 移除标题标记
-  
-  // 移除可能导致问题的特殊字符，保留中文、基本符号和数学符号
-  text = text.replace(/[^\w\s\u4e00-\u9fff,.，。！？()（）=+\-*/÷×²³√π∞≤≥≠≈±∑∏∫∂∇∆∈∉⊂⊃∪∩∅∀∃]/g, '');
-  
-  // 移除多余空格，但保留换行
-  text = text.replace(/[ \t]+/g, ' ').trim();
-  
-  // 保留完整内容，大幅增加长度限制
-  // 只在超过2000字符时才截断，确保完整显示解题步骤
-  if (text.length > 2000) {
-    text = text.substring(0, 1997) + "...";
+  try {
+    // 移除markdown标记，但保留内容
+    text = text.replace(/\*\*/g, ''); // 移除加粗标记
+    text = text.replace(/`/g, ''); // 移除代码标记
+    text = text.replace(/^#+\s*/g, ''); // 移除标题标记
+    
+    // 智能处理LaTeX数学表达式
+    text = text.replace(/\$\$([^$]+)\$\$/g, (match, content) => {
+      // 简化复杂的LaTeX表达式
+      if (content.length > 30) {
+        return content.substring(0, 27) + "...";
+      }
+      return content;
+    });
+    
+    // 移除可能导致问题的特殊字符，保留中文、基本符号和数学符号
+    text = text.replace(/[^\w\s\u4e00-\u9fff,.，。！？()（）=+\-*/÷×²³√π∞≤≥≠≈±∑∏∫∂∇∆∈∉⊂⊃∪∩∅∀∃]/g, '');
+    
+    // 移除多余空格和换行，但保留基本格式
+    text = text.replace(/[ \t]+/g, ' ').trim();
+    text = text.replace(/\n\s*\n/g, '\n');
+    
+    // 智能长度控制 - 根据内容类型调整
+    const maxLength = 800; // 降低最大长度，提高渲染稳定性
+    if (text.length > maxLength) {
+      // 尝试在句号处截断
+      const sentences = text.split(/[。！？.!?]/);
+      let truncated = '';
+      for (const sentence of sentences) {
+        if ((truncated + sentence).length <= maxLength - 3) {
+          truncated += sentence + '。';
+        } else {
+          break;
+        }
+      }
+      text = truncated || text.substring(0, maxLength - 3) + "...";
+    }
+    
+    return text;
+  } catch (error) {
+    console.error('文本清理失败:', error);
+    // 返回安全的默认文本
+    return text ? text.substring(0, 200) : "步骤内容";
   }
-  
-  return text;
 }
 
 /**
@@ -772,53 +871,121 @@ function cleanTextForManim(text) {
  * @returns {Promise<string>} - 返回mp4视频URL
  */
 export async function generateManimVideoFromQwen(qwenSteps, outputName = "qwen_video1") {
-  const manimScript = buildManimScriptFromQwen(qwenSteps)
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 300000); // 5分钟
+  // 智能优化步骤内容，减少渲染复杂度
+  const optimizedSteps = optimizeStepsForManim(qwenSteps);
+  const manimScript = buildManimScriptFromQwen(optimizedSteps)
+  
+  // 实现重试机制和渐进式超时
+  const maxRetries = 3;
+  const baseTimeout = 180000; // 3分钟基础超时
+  const maxTimeout = 600000; // 10分钟最大超时
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const currentTimeout = Math.min(baseTimeout * attempt, maxTimeout);
+    const timeoutId = setTimeout(() => controller.abort(), currentTimeout);
 
-  try {
-    console.log(`🎬 开始生成Manim视频: ${outputName}`)
-    
-    const resp = await fetch("http://127.0.0.1:5001/api/manim_render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        script: manimScript,
-        output_name: outputName,
-        scene_name: "MathSolutionScene"
-      }),
-      signal: controller.signal
-    })
-    
-    clearTimeout(timeoutId);
-    
-    if (!resp.ok) {
-      throw new Error(`HTTP错误: ${resp.status} ${resp.statusText}`)
-    }
-    
-    const data = await resp.json()
-    console.log(`📄 Manim API响应:`, data)
-    
-    if (data.success) {
-      console.log(`✅ Manim视频生成成功: ${data.video_url}`)
-      return data.video_url
-    } else {
-      throw new Error(data.error || "Manim渲染失败")
-    }
-  } catch (e) {
-    clearTimeout(timeoutId);
-    console.error(`❌ Manim渲染失败:`, e)
-    
-    if (e.name === 'AbortError') {
-      throw new Error("Manim渲染超时，请简化问题或稍后重试")
-    } else if (e.message.includes('fetch') || e.message.includes('Connection refused')) {
-      // 服务器连接失败，返回固定的模拟视频URL
-      console.log("🔄 Manim服务器不可用，返回模拟视频")
-      return `/rendered_videos/fallback_video.mp4`
-    } else {
-      throw new Error(e.message);
+    try {
+      console.log(`🎬 开始生成Manim视频 (尝试 ${attempt}/${maxRetries}): ${outputName}`)
+      console.log(`⏱️ 超时设置: ${currentTimeout/1000}秒`)
+      
+      const resp = await fetch("http://127.0.0.1:5001/api/manim_render", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Retry-Attempt": attempt.toString()
+        },
+        body: JSON.stringify({
+          script: manimScript,
+          output_name: outputName,
+          scene_name: "MathSolutionScene",
+          quality: attempt === 1 ? "high" : "medium", // 首次尝试高质量，重试时降低质量
+          timeout: currentTimeout
+        }),
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId);
+      
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        console.error(`❌ HTTP错误 ${resp.status}: ${errorText}`)
+        
+        if (resp.status === 504 && attempt < maxRetries) {
+          console.log(`🔄 超时错误，准备重试...`)
+          continue;
+        }
+        
+        throw new Error(`HTTP错误: ${resp.status} ${resp.statusText}`)
+      }
+      
+      const data = await resp.json()
+      console.log(`📄 Manim API响应:`, data)
+      
+      if (data.success) {
+        console.log(`✅ Manim视频生成成功 (尝试 ${attempt}): ${data.video_url}`)
+        return data.video_url
+      } else {
+        throw new Error(data.error || "Manim渲染失败")
+      }
+    } catch (e) {
+      clearTimeout(timeoutId);
+      console.error(`❌ Manim渲染失败 (尝试 ${attempt}):`, e)
+      
+      if (e.name === 'AbortError') {
+        if (attempt < maxRetries) {
+          console.log(`⏰ 渲染超时，准备重试 (${attempt + 1}/${maxRetries})...`)
+          // 重试前等待一段时间，避免服务器过载
+          await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+          continue;
+        } else {
+          throw new Error("Manim渲染多次超时，请简化问题或稍后重试")
+        }
+      } else if (e.message.includes('fetch') || e.message.includes('Connection refused')) {
+        // 服务器连接失败，返回固定的模拟视频URL
+        console.log("🔄 Manim服务器不可用，返回模拟视频")
+        return `/rendered_videos/fallback_video.mp4`
+      } else if (attempt < maxRetries) {
+        console.log(`🔄 其他错误，准备重试 (${attempt + 1}/${maxRetries})...`)
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        continue;
+      } else {
+        throw new Error(e.message);
+      }
     }
   }
+  
+  throw new Error("所有重试都失败了");
+}
+
+/**
+ * 智能优化步骤内容，减少Manim渲染复杂度
+ * @param {string[]} steps - 原始步骤
+ * @returns {string[]} - 优化后的步骤
+ */
+function optimizeStepsForManim(steps) {
+  return steps.map(step => {
+    let optimized = step;
+    
+    // 1. 限制单步内容长度，避免过长的文本
+    if (optimized.length > 500) {
+      optimized = optimized.substring(0, 497) + "...";
+    }
+    
+    // 2. 移除可能导致渲染问题的特殊字符
+    optimized = optimized.replace(/[^\w\s\u4e00-\u9fff,.，。！？()（）=+\-*/÷×²³√π∞≤≥≠≈±∑∏∫∂∇∆∈∉⊂⊃∪∩∅∀∃]/g, '');
+    
+    // 3. 简化复杂的数学表达式
+    optimized = optimized.replace(/\$\$([^$]+)\$\$/g, (match, content) => {
+      // 保留LaTeX内容但简化显示
+      return content.length > 50 ? content.substring(0, 47) + "..." : content;
+    });
+    
+    // 4. 移除多余的换行和空格
+    optimized = optimized.replace(/\n\s*\n/g, '\n').trim();
+    
+    return optimized;
+  });
 }
 
 export default new MathVideoAIService()
