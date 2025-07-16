@@ -597,30 +597,42 @@ Format as JSON:
 export function buildManimScriptFromQwen(qwenSteps, sceneName = "MathSolutionScene") {
   console.log('🎬 开始构建Manim脚本，原始步骤:', qwenSteps)
   
-  // 保持原始步骤顺序，不过度清理
-  const maxSteps = 10; // 增加最大步骤数
+  // 智能步骤处理和排序
   let cleanedSteps = qwenSteps
     .filter(step => step && step.trim())
     .map((step, index) => ({
-      content: step.trim(), // 保留原始内容
+      content: step.trim(),
       originalIndex: index
     }))
-    .filter(step => step.content.length > 0) // 只过滤空内容
-    .slice(0, maxSteps); // 限制步骤数量
+    .filter(step => step.content.length > 0);
 
-  // 智能去重，保持顺序，避免重复的步骤标题
+  // 增强的去重逻辑：基于内容相似性而不是完全匹配
   const uniqueSteps = [];
-  const seen = new Set();
+  const seenContent = new Set();
+  
   for (const step of cleanedSteps) {
-    // 提取步骤的关键内容（前30个字符）用于去重判断，避免误判
-    const keyContent = step.content.substring(0, 30).trim().toLowerCase();
-    if (!seen.has(keyContent)) {
-      uniqueSteps.push(step);
-      seen.add(keyContent);
+    const cleanContent = step.content.trim()
+    if (cleanContent.length > 10) {
+      // 使用前60个字符作为去重依据，提高准确性
+      const key = cleanContent.substring(0, 60).toLowerCase().replace(/\s+/g, ' ')
+      if (!seenContent.has(key)) {
+        uniqueSteps.push(step)
+        seenContent.add(key)
+        console.log(`✅ 保留步骤: ${cleanContent.substring(0, 50)}...`)
+      } else {
+        console.log(`⚠️ 跳过重复步骤: ${cleanContent.substring(0, 50)}...`)
+      }
     }
   }
   
-  // 对去重后的步骤进行智能优化，平衡内容完整性和渲染稳定性
+  // 保持原始顺序，但限制最大步骤数
+  const maxSteps = 8;
+  if (uniqueSteps.length > maxSteps) {
+    console.log(`📊 步骤数量过多 (${uniqueSteps.length})，截取前${maxSteps}个步骤`)
+    uniqueSteps.splice(maxSteps)
+  }
+  
+  // 对去重后的步骤进行智能优化
   cleanedSteps = uniqueSteps.map(step => cleanTextForManim(step.content));
   
   // 进一步优化步骤，确保渲染稳定性和专业性
@@ -652,11 +664,10 @@ export function buildManimScriptFromQwen(qwenSteps, sceneName = "MathSolutionSce
     return step;
   });
   
-  // 限制总步骤数，避免渲染过久
-  const maxStepCount = 6;
-  if (cleanedSteps.length > maxStepCount) {
-    console.log(`📊 步骤数量过多 (${cleanedSteps.length})，截取前${maxStepCount}个步骤`);
-    cleanedSteps = cleanedSteps.slice(0, maxStepCount);
+  // 验证步骤数量，确保渲染稳定性
+  if (cleanedSteps.length > 8) {
+    console.log(`📊 步骤数量过多 (${cleanedSteps.length})，截取前8个步骤`);
+    cleanedSteps = cleanedSteps.slice(0, 8);
   }
 
   console.log('🧹 清理后的步骤（去重后顺序）:', cleanedSteps)
@@ -705,11 +716,15 @@ class ${sceneName}(Scene):
             self.play(Write(title), run_time=0.8)
             self.wait(0.3)
             
-            # 显示步骤
+            # 显示步骤（确保顺序正确）
             steps = ${stepsStr}
             print(f"Manim渲染步骤数量: {len(steps)}")
             
-            # 限制最大步骤数，避免渲染过久
+            # 验证步骤顺序和内容
+            for i, step in enumerate(steps):
+                print(f"步骤 {i+1}: {step[:50]}...")
+            
+            # 限制最大步骤数，确保渲染稳定性
             max_steps = min(len(steps), 8)
             steps = steps[:max_steps]
             

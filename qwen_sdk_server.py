@@ -36,6 +36,13 @@ class QWENSDKHandler(BaseHTTPRequestHandler):
             post_data = self.rfile.read(content_length)
             request_data = json.loads(post_data.decode('utf-8'))
             
+            # 兼容prompt字段格式
+            if 'prompt' in request_data and 'messages' not in request_data:
+                request_data['messages'] = [{
+                    'role': 'user',
+                    'content': request_data['prompt']
+                }]
+            
             print(f"📥 收到API请求: {request_data.get('messages', [])[-1]['content'][:50]}...")
             
             # 获取 API 密钥

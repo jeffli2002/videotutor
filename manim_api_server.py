@@ -54,61 +54,91 @@ def manim_render():
 
     # 自动查找分段mp4并合成
     try:
-        # 查找分段mp4目录，支持多种分辨率
-        possible_dirs = [
-            os.path.join("media", "videos", output_name, "2160p60", "partial_movie_files", scene_name),
-            os.path.join("media", "videos", output_name, "1080p60", "partial_movie_files", scene_name),
-            os.path.join("media", "videos", output_name, "1080p30", "partial_movie_files", scene_name),
-            os.path.join("media", "videos", output_name, "720p30", "partial_movie_files", scene_name)
+        # 优化：自动降级查找实际存在的分辨率目录
+        possible_resolutions = [
+            "1080p30", "1080p60", "720p30", "2160p60"  # 优先1080p30，因为Manim默认生成这个
         ]
-        
         part_dir = None
-        for dir_path in possible_dirs:
+        actual_resolution = None
+        for res in possible_resolutions:
+            dir_path = os.path.join("media", "videos", output_name, res, "partial_movie_files", scene_name)
             if os.path.exists(dir_path):
                 part_dir = dir_path
-                logger.info(f"找到分段视频目录: {part_dir}")
+                actual_resolution = res
+                logger.info(f"✅ 找到分段视频目录: {part_dir}")
                 break
         
         if not part_dir:
-            logger.error(f"未找到分段视频目录，尝试过的路径: {possible_dirs}")
-            # 检查media/videos目录是否存在
+            logger.error(f"❌ 未找到分段视频目录，尝试过的路径: {[os.path.join('media', 'videos', output_name, r, 'partial_movie_files', scene_name) for r in possible_resolutions]}")
+            # 输出media/videos/output_name下所有目录
             media_videos_dir = os.path.join("media", "videos", output_name)
             if os.path.exists(media_videos_dir):
-                logger.info(f"media/videos目录存在: {media_videos_dir}")
-                # 列出该目录下的所有子目录
+                logger.info(f"📁 media/videos目录存在: {media_videos_dir}")
+                # 列出该目录下的所有子目录和文件
                 subdirs = [d for d in os.listdir(media_videos_dir) if os.path.isdir(os.path.join(media_videos_dir, d))]
-                logger.info(f"找到的子目录: {subdirs}")
-            else:
-                logger.error(f"media/videos目录不存在: {media_videos_dir}")
-            return jsonify({'success': False, 'error': f'未找到分段视频目录: {possible_dirs}'}), 500
-        part_files = sorted(glob.glob(os.path.join(part_dir, "*.mp4")))
-        # 可选：如需自定义排序规则，可在此处实现
-        # part_files = sorted(part_files, key=自定义排序函数)
-        filelist_txt = os.path.join(part_dir, "filelist.txt")
-        with open(filelist_txt, "w", encoding="utf-8") as f:
-            for pf in part_files:
-                f.write(f"file '{os.path.abspath(pf)}'\n")
-        # 合成输出路径
-        final_dir = "rendered_videos"
-        os.makedirs(final_dir, exist_ok=True)
-        final_mp4 = os.path.join(final_dir, f"{output_name}.mp4")
-        # ffmpeg合成，强制30fps，兼容主流播放器
-        ffmpeg_cmd = [
-            "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", filelist_txt,
-            "-r", "30", "-c:v", "libx264", "-pix_fmt", "yuv420p", final_mp4
-        ]
-        logger.info(f"执行ffmpeg合成: {' '.join(ffmpeg_cmd)}")
-        ffmpeg_result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
-        if ffmpeg_result.returncode != 0:
-            logger.error(f"ffmpeg合成失败: {ffmpeg_result.stderr}")
-            return jsonify({'success': False, 'error': f'ffmpeg合成失败: {ffmpeg_result.stderr}'}), 500
-        logger.info(f"视频合成成功: {final_mp4}")
-        # 返回最终视频URL
-        video_url = f"/rendered_videos/{output_name}.mp4"
-        return jsonify({'success': True, 'video_url': video_url}), 200
+                files = [f for f in os.listdir(media_videos_dir) if os.path.isfile(os.path.join(media_videos_dir, f))]
+                logger.info(f"📂 找到的子目录: {subdirs}")
+                logger.info(f"📄 找到的文件: {files}")
+                # 尝试查找任何包含partial_movie_files的目录
+                for subdir in subdirs:
+                    partial_dir = os.path.join(media_videos_dir, subdir, "partial_movie_files", scene_name)
+                    if os.path.exists(partial_dir):
+                        part_dir = partial_dir
+                        actual_resolution = subdir
+                        logger.info(f"🔍 通过备用方法找到分段视频目录: {part_dir}")
+                        break
+            raise Exception(f"无法找到分段视频目录，请检查Manim渲染是否成功")
+        
+        # 查找分段mp4文件
+        mp4_files = [f for f in os.listdir(part_dir) if f.endswith('.mp4') and not f.startswith('filelist')]
+        if not mp4_files:
+            raise Exception(f"分段视频目录中没有找到mp4文件: {part_dir}")
+        
+        logger.info(f"📹 找到 {len(mp4_files)} 个分段视频文件")
+        
+        # 创建filelist.txt，确保按正确顺序合成
+        filelist_path = os.path.join(part_dir, "filelist.txt")
+        with open(filelist_path, 'w', encoding='utf-8') as f:
+            for mp4_file in sorted(mp4_files):  # 按文件名排序确保顺序
+                f.write(f"file '{mp4_file}'\n")
+        
+        logger.info(f"📝 已创建filelist.txt: {filelist_path}")
+        
+        # 执行ffmpeg合成
+        output_video_path = os.path.join("rendered_videos", f"{output_name}.mp4")
+        ffmpeg_cmd = f'ffmpeg -y -f concat -safe 0 -i "{filelist_path}" -r 30 -c:v libx264 -pix_fmt yuv420p "{output_video_path}"'
+        
+        logger.info(f"🎬 执行ffmpeg合成: {ffmpeg_cmd}")
+        
+        # 执行ffmpeg命令
+        result = subprocess.run(ffmpeg_cmd, shell=True, capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            logger.error(f"❌ ffmpeg合成失败: {result.stderr}")
+            raise Exception(f"ffmpeg合成失败: {result.stderr}")
+        
+        logger.info(f"✅ 视频合成成功: {output_video_path}")
+        
+        # 返回成功响应
+        response_data = {
+            'success': True,
+            'message': '视频渲染和合成成功',
+            'video_path': output_video_path,
+            'resolution': actual_resolution,
+            'segment_count': len(mp4_files)
+        }
+        
+        return jsonify(response_data), 200
+        
     except Exception as e:
-        logger.error(f"视频合成异常: {e}")
-        return jsonify({'success': False, 'error': f'视频合成异常: {str(e)}'}), 500
+        logger.error(f"❌ 视频合成失败: {str(e)}")
+        error_response = {
+            'success': False,
+            'error': str(e),
+            'message': '视频合成失败'
+        }
+        
+        return jsonify(error_response), 500
 
 @app.route('/rendered_videos/<filename>')
 def serve_rendered_video(filename):

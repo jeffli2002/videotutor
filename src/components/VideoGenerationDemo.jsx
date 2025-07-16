@@ -182,10 +182,10 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
       
       // 1. 优先提取"详细解题步骤"部分，支持多种格式
       const detailPatterns = [
-        /\*\*详细解题步骤\*\*[\s\S]*?(?=\*\*|$)/,
-        /详细解题步骤[\s\S]*?(?=(\*\*|最终答案|验证过程|相关数学概念|常见错误|$))/,
-        /\*\*解题步骤\*\*[\s\S]*?(?=\*\*|$)/,
-        /解题步骤[\s\S]*?(?=(\*\*|最终答案|验证过程|相关数学概念|常见错误|$))/
+        /\*\*详细解题步骤\*\*[\s\S]*?(?=\*\*最终答案\*\*|\*\*验证过程\*\*|\*\*相关数学概念\*\*|\*\*常见错误提醒\*\*|$)/,
+        /详细解题步骤[\s\S]*?(?=(最终答案|验证过程|相关数学概念|常见错误提醒|$))/,
+        /\*\*解题步骤\*\*[\s\S]*?(?=\*\*最终答案\*\*|\*\*验证过程\*\*|\*\*相关数学概念\*\*|\*\*常见错误提醒\*\*|$)/,
+        /解题步骤[\s\S]*?(?=(最终答案|验证过程|相关数学概念|常见错误提醒|$))/
       ]
       
       let detailBlock = ''
@@ -333,7 +333,7 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
       
       // 2. 如果还没有，尝试全局编号提取，保持顺序
       if (steps.length === 0) {
-        // 首先尝试提取带**的步骤标题
+        // 首先尝试提取带**的步骤标题，但排除错误提醒等无关内容
         const boldStepPattern = /(\d+)[.、\)]\s*\*\*([^*]+)\*\*/g
         const boldMatches = [...aiContent.matchAll(boldStepPattern)]
         
@@ -342,7 +342,18 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
           boldMatches.forEach(match => {
             const stepNum = parseInt(match[1])
             const stepTitle = match[2].trim()
-            stepMap.set(stepNum, stepTitle)
+            
+            // 排除错误提醒等无关内容
+            const excludeKeywords = ['错误', '提醒', '常见', '注意', '避免', '忘记', '漏掉', '误认为', '忽略'];
+            const hasExcludeKeyword = excludeKeywords.some(keyword => stepTitle.includes(keyword));
+            
+            // 只保留真正的解题步骤
+            const includeKeywords = ['步骤', '第', '理解', '列出', '求解', '得出', '计算', '分析', '移项', '化简', '验证'];
+            const hasIncludeKeyword = includeKeywords.some(keyword => stepTitle.includes(keyword));
+            
+            if (!hasExcludeKeyword && hasIncludeKeyword) {
+              stepMap.set(stepNum, stepTitle)
+            }
           })
           
           steps = Array.from(stepMap.keys())
@@ -382,9 +393,15 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
                 // 清理内容，移除多余的换行和空格
                 stepContent = stepContent.replace(/\n\s*\n/g, '\n').trim()
                 
-                // 如果这个编号还没有内容，或者新内容更长，则更新
-                if (!stepMap.has(stepNum) || stepContent.length > stepMap.get(stepNum).length) {
-                  stepMap.set(stepNum, stepContent)
+                // 排除错误提醒等无关内容
+                const excludeKeywords = ['错误', '提醒', '常见', '注意', '避免', '忘记', '漏掉', '误认为', '忽略'];
+                const hasExcludeKeyword = excludeKeywords.some(keyword => stepContent.includes(keyword));
+                
+                if (!hasExcludeKeyword) {
+                  // 如果这个编号还没有内容，或者新内容更长，则更新
+                  if (!stepMap.has(stepNum) || stepContent.length > stepMap.get(stepNum).length) {
+                    stepMap.set(stepNum, stepContent)
+                  }
                 }
               })
               
@@ -504,18 +521,32 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
         console.log('🔄 使用备用步骤:', steps)
       }
       
-      // 5. 确保步骤内容与问题相关，并保持正确顺序
+      // 5. 使用新的智能步骤提取和排序函数
+      if (steps.length === 0) {
+        console.log('🔄 使用智能步骤提取函数...')
+        steps = extractAndSortSteps(aiContent)
+      }
+      
+      // 6. 最终验证和优化步骤
       if (steps.length > 0) {
-        // 确保步骤顺序正确，移除重复步骤
+        // 智能去重：基于内容相似性，而不是完全匹配
         const uniqueSteps = []
-        const seenSteps = new Set()
+        const seenContent = new Set()
+        
         for (const step of steps) {
           const cleanStep = step.trim()
-          if (cleanStep && cleanStep.length > 5 && !seenSteps.has(cleanStep)) {
-            uniqueSteps.push(cleanStep)
-            seenSteps.add(cleanStep)
+          if (cleanStep && cleanStep.length > 10) {
+            // 使用前50个字符作为去重依据，避免误判
+            const key = cleanStep.substring(0, 50).toLowerCase().replace(/\s+/g, ' ')
+            if (!seenContent.has(key)) {
+              uniqueSteps.push(cleanStep)
+              seenContent.add(key)
+            } else {
+              console.log(`⚠️ 跳过重复步骤: ${cleanStep.substring(0, 30)}...`)
+            }
           }
         }
+        
         steps = uniqueSteps
         
         // 添加问题信息到第一个步骤（如果还没有的话）
@@ -524,12 +555,12 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
           steps.unshift(questionInfo)
         }
         
-        console.log('✅ 最终提取的步骤（保持顺序）:', steps)
+        console.log('✅ 最终提取的步骤（智能排序）:', steps)
         console.log('📊 步骤数量:', steps.length)
         
-        // 验证步骤顺序
+        // 验证步骤顺序和内容
         for (let i = 0; i < steps.length; i++) {
-          console.log(`步骤 ${i + 1}: ${steps[i]}`)
+          console.log(`步骤 ${i + 1}: ${steps[i].substring(0, 80)}${steps[i].length > 80 ? '...' : ''}`)
         }
       }
       let manimVideoUrl = ''
@@ -830,6 +861,175 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
 
 **Note:** Due to network connectivity issues, this is a simplified local response. Please try again later for a complete AI-powered solution.`
     }
+  }
+
+  // 新增：智能步骤提取和排序函数
+  const extractAndSortSteps = (aiContent) => {
+    console.log('🔍 开始智能步骤提取和排序...')
+    
+    let steps = []
+    const stepMap = new Map() // 使用Map确保步骤编号唯一性
+    
+    // 1. 优先提取"详细解题步骤"块中的编号步骤
+    const detailBlockMatch = aiContent.match(/\*\*详细解题步骤\*\*\s*([\s\S]*?)(?=\*\*最终答案\*\*|\*\*验证过程\*\*|\*\*相关数学概念\*\*|\*\*常见错误提醒\*\*|$)/)
+    
+    if (detailBlockMatch) {
+      const detailBlock = detailBlockMatch[1]
+      console.log('✅ 找到详细解题步骤块')
+      
+      // 使用改进的正则表达式，更准确地匹配编号步骤
+      const stepPatterns = [
+        // 匹配：1. **标题** 内容（多行）
+        /(\d+)[.、\)]\s*\*\*([^*]+?)\*\*\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|$)/g,
+        // 匹配：1. 标题 内容（多行）
+        /(\d+)[.、\)]\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|$)/g,
+        // 匹配：1. 标题（单行）
+        /(\d+)\s*[.、\)]\s*([^\n]+)/g
+      ]
+      
+      for (const pattern of stepPatterns) {
+        const matches = [...detailBlock.matchAll(pattern)]
+        if (matches.length > 0) {
+          console.log(`📊 正则表达式匹配到 ${matches.length} 个步骤`)
+          
+          matches.forEach(match => {
+            const stepNum = parseInt(match[1])
+            let stepContent = ''
+            
+            if (match.length >= 4) {
+              // 带**的格式
+              const title = match[2].trim()
+              const content = (match[3] || '').trim()
+              stepContent = `**${title}** ${content}`.trim()
+            } else if (match.length >= 3) {
+              // 普通格式
+              stepContent = match[2].trim()
+            }
+            
+            // 清理内容
+            stepContent = stepContent.replace(/\n\s*\n/g, '\n').trim()
+            
+            // 只保留有效的步骤内容
+            if (stepContent && stepContent.length > 10) {
+              // 如果这个编号还没有内容，或者新内容更详细，则更新
+              if (!stepMap.has(stepNum) || stepContent.length > stepMap.get(stepNum).length) {
+                stepMap.set(stepNum, stepContent)
+                console.log(`📝 步骤 ${stepNum}: ${stepContent.substring(0, 50)}...`)
+              }
+            }
+          })
+          
+          if (stepMap.size > 0) break // 找到有效步骤后停止尝试其他模式
+        }
+      }
+    }
+    
+    // 2. 如果详细步骤块中没有找到，尝试全局搜索
+    if (stepMap.size === 0) {
+      console.log('⚠️ 详细步骤块中未找到步骤，尝试全局搜索...')
+      
+      // 全局搜索编号步骤
+      const globalPatterns = [
+        /(\d+)[.、\)]\s*\*\*([^*]+?)\*\*\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|$)/g,
+        /(\d+)[.、\)]\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|$)/g,
+        /(\d+)\s*[.、\)]\s*([^\n]+)/g
+      ]
+      
+      for (const pattern of globalPatterns) {
+        const matches = [...aiContent.matchAll(pattern)]
+        if (matches.length > 0) {
+          console.log(`📊 全局搜索匹配到 ${matches.length} 个步骤`)
+          
+          matches.forEach(match => {
+            const stepNum = parseInt(match[1])
+            let stepContent = ''
+            
+            if (match.length >= 4) {
+              const title = match[2].trim()
+              const content = (match[3] || '').trim()
+              stepContent = `**${title}** ${content}`.trim()
+            } else if (match.length >= 3) {
+              stepContent = match[2].trim()
+            }
+            
+            stepContent = stepContent.replace(/\n\s*\n/g, '\n').trim()
+            
+            // 过滤掉错误提醒等无关内容
+            const excludeKeywords = ['错误', '提醒', '常见', '注意', '避免', '忘记', '漏掉', '误认为', '忽略']
+            const hasExcludeKeyword = excludeKeywords.some(keyword => stepContent.includes(keyword))
+            
+            if (!hasExcludeKeyword && stepContent && stepContent.length > 10) {
+              if (!stepMap.has(stepNum) || stepContent.length > stepMap.get(stepNum).length) {
+                stepMap.set(stepNum, stepContent)
+                console.log(`📝 全局步骤 ${stepNum}: ${stepContent.substring(0, 50)}...`)
+              }
+            }
+          })
+          
+          if (stepMap.size > 0) break
+        }
+      }
+    }
+    
+    // 3. 按编号排序并重建步骤数组
+    if (stepMap.size > 0) {
+      const sortedSteps = Array.from(stepMap.keys())
+        .sort((a, b) => a - b) // 确保按数字顺序排序
+        .map(num => stepMap.get(num))
+      
+      console.log(`✅ 成功提取 ${sortedSteps.length} 个有序步骤`)
+      steps = sortedSteps
+    }
+    
+    // 4. 如果仍然没有找到步骤，使用智能分割
+    if (steps.length === 0) {
+      console.log('⚠️ 未找到编号步骤，使用智能分割...')
+      
+      // 按段落分割内容
+      const paragraphs = aiContent.split(/\n\s*\n/)
+        .map(p => p.trim())
+        .filter(p => p.length > 20 && 
+          !p.startsWith('**') && 
+          !p.includes('错误') && 
+          !p.includes('提醒') &&
+          !p.includes('注意'))
+      
+      if (paragraphs.length > 0) {
+        steps = paragraphs.slice(0, 6) // 限制最大步骤数
+        console.log(`✅ 智能分割得到 ${steps.length} 个步骤`)
+      }
+    }
+    
+    // 5. 最终验证和清理
+    if (steps.length > 0) {
+      // 移除重复步骤（基于内容相似性）
+      const uniqueSteps = []
+      const seenContent = new Set()
+      
+      for (const step of steps) {
+        const cleanStep = step.trim()
+        if (cleanStep && cleanStep.length > 10) {
+          // 使用前50个字符作为去重依据
+          const key = cleanStep.substring(0, 50).toLowerCase()
+          if (!seenContent.has(key)) {
+            uniqueSteps.push(cleanStep)
+            seenContent.add(key)
+          } else {
+            console.log(`⚠️ 跳过重复步骤: ${cleanStep.substring(0, 30)}...`)
+          }
+        }
+      }
+      
+      steps = uniqueSteps
+      console.log(`✅ 去重后剩余 ${steps.length} 个步骤`)
+      
+      // 验证步骤顺序
+      for (let i = 0; i < steps.length; i++) {
+        console.log(`步骤 ${i + 1}: ${steps[i].substring(0, 50)}...`)
+      }
+    }
+    
+    return steps
   }
 
   const buildMathPrompt = (question, language) => {
