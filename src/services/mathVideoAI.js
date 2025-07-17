@@ -697,7 +697,7 @@ function extractAndSortSteps(aiContent) {
   const steps = [] // 使用数组确保顺序
   
   // 1. 首先尝试匹配实际AI响应格式："**步骤编号：1** 具体操作：... 详细解释：..."
-  const detailedStepPattern = /(?:^|\n)(\d+)[.、\)]?\s*(?:\*\*步骤编号：\1\*\*\s*\*\*具体操作：([^*]+)\*\*\s*\*\*详细解释：([^*]+)\*\*(?:\s*\*\*中间结果：\*\*\s*([^\n]*))?)/gm;
+  const detailedStepPattern = /(?:^|\n)(\d+)[.、\)]?\s*(?:\*\*步骤编号：\1\*\*\s*\*\*具体操作：([^*]+)\*\*(?:\s*\*\*详细解释：([^*]+)\*\*)?(?:\s*\*\*中间结果：([^*]*)\*\*)?)?/gm;
   const detailedMatches = [...aiContent.matchAll(detailedStepPattern)];
   
   if (detailedMatches.length > 0) {
@@ -816,12 +816,52 @@ function extractAndSortSteps(aiContent) {
     }
   }
   
-  // 5. 最后使用默认步骤（仅作为后备）
+  // 5. 增强后备方案 - 从内容中智能提取数学段落
+  console.log('🔍 增强后备提取方案...');
+  
+  // 提取所有包含数学内容的段落
+  const paragraphs = aiContent
+    .split('\n\n')
+    .map(p => p.trim())
+    .filter(p => p.length > 20)
+    .filter(p => {
+      const hasMath = /[\+\-\=\×\÷\√\d\$\^\_\{\}\\]/.test(p) || 
+                     /(计算|求解|化简|展开|合并|移项|代入|方程|函数|导数|积分)/.test(p) ||
+                     /(calculate|solve|simplify|equation|function|derivative|integrate)/i.test(p);
+      const notHeader = !p.startsWith('**最终答案') && 
+                        !p.startsWith('**验证') && 
+                        !p.startsWith('**总结') &&
+                        !p.startsWith('**结论');
+      return hasMath && notHeader;
+    });
+  
+  if (paragraphs.length >= 2) {
+    console.log(`✅ 找到 ${paragraphs.length} 个数学段落作为步骤`);
+    return paragraphs.map(p => p.replace(/\s+/g, ' ').trim()).slice(0, 6);
+  }
+  
+  // 6. 提取句子作为步骤
+  const sentences = aiContent
+    .split(/[.!?。！？]/)
+    .map(s => s.trim())
+    .filter(s => s.length > 30 && s.length < 200)
+    .filter(s => {
+      const hasMath = /[\+\-\=\×\÷\√\d]/.test(s) || 
+                     /(计算|求解|方程|公式|定理)/.test(s) ||
+                     /(calculate|solve|equation|formula|theorem)/i.test(s);
+      return hasMath;
+    });
+  
+  if (sentences.length >= 2) {
+    console.log(`✅ 找到 ${sentences.length} 个数学句子作为步骤`);
+    return sentences.slice(0, 6);
+  }
+  
+  // 7. 最后使用默认步骤（仅作为最终后备）
   console.log('⚠️ 使用默认数学解题步骤');
   return [
     "理解题意：分析已知条件和求解目标",
     "建立数学模型：根据题意列出方程或表达式", 
-    "选择解题方法：确定合适的数学工具和策略",
     "逐步计算：按逻辑顺序进行数学运算",
     "验证结果：检查答案的正确性和合理性"
   ];
