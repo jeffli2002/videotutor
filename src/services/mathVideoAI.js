@@ -694,65 +694,100 @@ function extractAndSortSteps(aiContent) {
   
   const steps = [] // 使用数组确保顺序
   
-  // 1. 只从"详细解题步骤"块提取，避免全局污染
+  // 1. 优先提取"详细解题步骤"块中的完整步骤内容
   const detailBlockMatch = aiContent.match(/\*\*详细解题步骤\*\*\s*([\s\S]*?)(?=\*\*最终答案\*\*|$)/)
   
   if (detailBlockMatch) {
     const detailBlock = detailBlockMatch[1]
     console.log('📋 找到详细解题步骤块，长度:', detailBlock.length)
     
-    // 使用精确的单一步骤提取模式
-    const stepPattern = /(\d+)[.、\)]\s*(?:\*\*([^*]+?)\*\*)?\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|$)/g
+    // 更灵活的步骤提取模式，支持多种格式
+    const stepPatterns = [
+      // 匹配：1. **标题** 内容（支持多行，包括数学公式）
+      /(\d+)[.、\)]\s*\*\*([^*]+?)\*\*\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|\*\*|$)/g,
+      // 匹配：1. 内容（包括数学公式和换行）
+      /(\d+)[.、\)]\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|\*\*|$)/g,
+      // 匹配：步骤描述（如果没有编号）
+      /(?:步骤|step)\s*(\d+)[:：\s]+([\s\S]*?)(?=\n\s*(?:步骤|step)|\*\*|$)/gi
+    ]
     
-    const matches = [...detailBlock.matchAll(stepPattern)]
-    if (matches.length > 0) {
-      console.log(`✅ 匹配到 ${matches.length} 个步骤`)
-      
-      // 直接按编号放置到正确位置
-      matches.forEach(match => {
-        const stepNum = parseInt(match[1]) - 1 // 转换为0-based索引
-        const title = (match[2] || '').trim()
-        const content = (match[3] || '').trim()
+    let foundSteps = false
+    for (const pattern of stepPatterns) {
+      const matches = [...detailBlock.matchAll(pattern)]
+      if (matches.length > 0) {
+        console.log(`✅ 使用模式匹配到 ${matches.length} 个步骤`)
         
-        let stepContent = title ? `**${title}** ${content}` : content
-        stepContent = stepContent.replace(/\n\s*\n/g, '\n').trim()
+        matches.forEach(match => {
+          const stepNum = parseInt(match[1]) - 1
+          let stepContent = ''
+          
+          if (match.length >= 4) {
+            // 带标题的格式
+            const title = match[2].trim()
+            const content = (match[3] || '').trim()
+            stepContent = `**${title}**\n${content}`
+          } else {
+            // 普通格式
+            stepContent = match[2].trim()
+          }
+          
+          // 清理内容但保留数学公式和格式
+          stepContent = stepContent.trim()
+          
+          if (stepContent.length > 20) { // 降低长度要求，允许详细内容
+            steps[stepNum] = stepContent
+            console.log(`📝 提取步骤 ${stepNum + 1}: ${stepContent.substring(0, 80)}...`)
+            foundSteps = true
+          }
+        })
         
-        if (stepContent.length > 10) {
-          steps[stepNum] = stepContent
-        }
-      })
+        if (foundSteps) break
+      }
+    }
+    
+    if (foundSteps) {
+      const validSteps = steps.filter(step => step && step.length > 0)
+      if (validSteps.length > 0) {
+        console.log(`✅ 成功提取 ${validSteps.length} 个详细步骤`)
+        return validSteps
+      }
     }
   }
   
-  // 移除空位并返回有序步骤
-  const validSteps = steps.filter(step => step && step.length > 0)
+  // 2. 尝试从整个内容中提取包含数学公式的详细步骤
+  console.log('🔄 尝试提取包含详细内容的步骤...')
   
-  if (validSteps.length > 0) {
-    console.log(`✅ 成功提取 ${validSteps.length} 个排序步骤`)
-    return validSteps
-  }
+  // 提取所有编号步骤，包括完整内容
+  const allStepsPattern = /(?:^|\n)(\d+)[.、\)]\s*([\s\S]*?)(?=\n\d+[.、\)]|$|\*\*)/gm
+  const allMatches = [...aiContent.matchAll(allStepsPattern)]
   
-  // 如果未找到详细步骤块，使用简化提取
-  console.log('🔄 未找到详细步骤块，使用简化提取...')
-  const simplePattern = /(?:步骤|step)\s*(\d+)[.:：\s]+([^\n]+)/gi
-  const simpleMatches = [...aiContent.matchAll(simplePattern)]
-  
-  if (simpleMatches.length > 0) {
-    const simpleSteps = simpleMatches.map(match => match[2].trim()).filter(s => s.length > 5)
-    if (simpleSteps.length > 0) {
-      console.log(`✅ 简化提取到 ${simpleSteps.length} 个步骤`)
-      return simpleSteps
+  if (allMatches.length > 0) {
+    const detailedSteps = allMatches.map(match => {
+      const content = match[2].trim()
+      return content
+    }).filter(content => content.length > 20)
+    
+    if (detailedSteps.length > 0) {
+      console.log(`✅ 提取到 ${detailedSteps.length} 个详细步骤`)
+      return detailedSteps
     }
   }
   
-  // 最后使用默认步骤
+  // 3. 从内容中提取段落作为步骤
+  const paragraphs = aiContent.split('\n\n').filter(p => p.trim().length > 50)
+  if (paragraphs.length >= 2) {
+    console.log('✅ 使用段落作为步骤')
+    return paragraphs.slice(0, 6) // 最多6个步骤
+  }
+  
+  // 4. 最后使用默认步骤（仅作为后备）
   console.log('⚠️ 使用默认步骤')
   return [
-    "分析题目条件",
-    "列出方程或不等式", 
-    "移项求解",
-    "计算得出结果",
-    "验证答案"
+    "理解题意：分析题目条件和要求",
+    "建立数学模型：根据题意列出方程或表达式", 
+    "逐步求解：使用数学方法求解",
+    "验证结果：检查答案是否正确",
+    "总结反思：回顾解题过程和方法"
   ]
 }
 
