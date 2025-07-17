@@ -692,104 +692,131 @@ Format as JSON:
  */
 function extractAndSortSteps(aiContent) {
   console.log('🔍 开始智能步骤提取...')
+  console.log('原始内容长度:', aiContent.length)
   
   const steps = [] // 使用数组确保顺序
   
-  // 预过滤：移除明显的非步骤内容
-  let filteredContent = aiContent;
+  // 1. 首先尝试匹配实际AI响应格式："**步骤编号：1** 具体操作：... 详细解释：..."
+  const detailedStepPattern = /(?:^|\n)(\d+)[.、\)]?\s*(?:\*\*步骤编号：\1\*\*\s*\*\*具体操作：([^*]+)\*\*\s*\*\*详细解释：([^*]+)\*\*(?:\s*\*\*中间结果：\*\*\s*([^\n]*))?)/gm;
+  const detailedMatches = [...aiContent.matchAll(detailedStepPattern)];
   
-  // 移除标题行
-  filteredContent = filteredContent.replace(/^#+.*?\n/gm, '');
-  filteredContent = filteredContent.replace(/^\*\*.*?\*\*\s*\n/gim, '');
-  filteredContent = filteredContent.replace(/^【.*?】\s*\n/gim, '');
-  
-  // 移除问题陈述部分
-  filteredContent = filteredContent.replace(/问题[：:]?.*?[\n\r]/gis, '');
-  filteredContent = filteredContent.replace(/题目[：:]?.*?[\n\r]/gis, '');
-  filteredContent = filteredContent.replace(/已知[：:]?.*?[\n\r]/gis, '');
-  filteredContent = filteredContent.replace(/求[：:]?.*?[\n\r]/gis, '');
-  
-  // 移除最终答案部分（通常作为独立步骤出现）
-  filteredContent = filteredContent.replace(/(?:最终)?答案[：:]?[\s\S]*?(?=\n\d+[.、\)]|$)/gis, '');
-  filteredContent = filteredContent.replace(/结论[：:]?[\s\S]*?(?=\n\d+[.、\)]|$)/gis, '');
-  filteredContent = filteredContent.replace(/结果[：:]?[\s\S]*?(?=\n\d+[.、\)]|$)/gis, '');
-  
-  // 1. 提取编号步骤，智能过滤
-  const stepPattern = /(?:^|\n)(\d+)[.、\)]\s*([\s\S]*?)(?=\n\d+[.、\)]|$|\*\*)/gm;
-  const matches = [...filteredContent.matchAll(stepPattern)];
-  
-  if (matches.length > 0) {
-    console.log(`✅ 找到 ${matches.length} 个编号步骤`);
+  if (detailedMatches.length > 0) {
+    console.log(`✅ 找到 ${detailedMatches.length} 个详细步骤格式`);
     
-    matches.forEach(match => {
+    detailedMatches.forEach(match => {
       const stepNum = parseInt(match[1]);
-      let content = match[2].trim();
+      const operation = match[2] ? match[2].trim() : '';
+      const explanation = match[3] ? match[3].trim() : '';
+      const result = match[4] ? match[4].trim() : '';
       
-      // 智能内容过滤
-      if (content.length > 10 && isValidMathStep(content)) {
-        // 清理步骤内容
-        content = cleanStepContent(content);
-        
-        if (content && content.length > 5) {
-          steps[stepNum - 1] = content;
-          console.log(`📝 提取步骤 ${stepNum}: ${content.substring(0, 80)}...`);
-        }
+      let fullContent = operation;
+      if (explanation && !operation.includes(explanation)) {
+        fullContent += '：' + explanation;
+      }
+      if (result && result.trim()) {
+        fullContent += '，计算结果：' + result.trim();
+      }
+      
+      if (fullContent.length > 10) {
+        steps[stepNum - 1] = fullContent;
+        console.log(`📝 提取详细步骤 ${stepNum}: ${fullContent.substring(0, 80)}...`);
       }
     });
     
     const validSteps = steps.filter(step => step && step.length > 0);
     if (validSteps.length > 0) {
-      console.log(`✅ 成功提取 ${validSteps.length} 个有效步骤`);
+      console.log(`✅ 成功提取 ${validSteps.length} 个详细步骤`);
       return validSteps;
     }
   }
   
-  // 2. 提取数学操作关键词的步骤
-  const mathStepKeywords = [
-    '计算', '求解', '代入', '化简', '展开', '合并', '移项',
-    '配方', '因式分解', '求导', '积分', '证明', '验证',
-    'calculate', 'solve', 'substitute', 'simplify', 'expand',
-    'combine', 'rearrange', 'factor', 'derive', 'integrate',
-    'prove', 'verify', 'compute'
-  ];
+  // 2. 尝试匹配带标题的步骤格式
+  const titledStepPattern = /(?:^|\n)(\d+)[.、\)]\s*\*\*([^*]+)\*\*\s*([^\n]+)/gm;
+  const titledMatches = [...aiContent.matchAll(titledStepPattern)];
   
-  const keywordPattern = new RegExp(
-    `(?:^|\\n)\\s*(\\d+)?[.、)]?\\s*(${mathStepKeywords.join('|')})[\\s\\S]*?(?=\\n\\d+[.、)]|$)`,
-    'gim'
-  );
-  
-  const keywordMatches = [...filteredContent.matchAll(keywordPattern)];
-  if (keywordMatches.length > 0) {
-    const mathSteps = keywordMatches.map((match, index) => {
-      let content = match[0].trim();
-      content = cleanStepContent(content);
-      return content;
-    }).filter(content => content && content.length > 10 && isValidMathStep(content));
+  if (titledMatches.length > 0) {
+    console.log(`✅ 找到 ${titledMatches.length} 个带标题步骤`);
     
-    if (mathSteps.length > 0) {
-      console.log(`✅ 提取到 ${mathSteps.length} 个数学操作步骤`);
-      return mathSteps.slice(0, 6);
+    titledMatches.forEach(match => {
+      const stepNum = parseInt(match[1]);
+      const title = match[2] ? match[2].trim() : '';
+      const content = match[3] ? match[3].trim() : '';
+      
+      let fullContent = title;
+      if (content && !title.includes(content)) {
+        fullContent += '：' + content;
+      }
+      
+      if (fullContent.length > 10) {
+        steps[stepNum - 1] = fullContent;
+        console.log(`📝 提取带标题步骤 ${stepNum}: ${fullContent.substring(0, 80)}...`);
+      }
+    });
+    
+    const validSteps = steps.filter(step => step && step.length > 0);
+    if (validSteps.length > 0) {
+      console.log(`✅ 成功提取 ${validSteps.length} 个带标题步骤`);
+      return validSteps;
     }
   }
   
-  // 3. 按段落提取，智能过滤
-  const paragraphs = filteredContent
+  // 3. 清理内容后提取普通编号步骤
+  let filteredContent = aiContent;
+  
+  // 保留数学公式，但清理格式标记
+  filteredContent = filteredContent.replace(/\*\*([^*]+)\*\*/g, '$1');
+  filteredContent = filteredContent.replace(/^#+.*?\n/gm, '');
+  
+  // 智能分割，保留数学内容
+  const stepPattern = /(?:^|\n)(\d+)[.、\)]\s*([\s\S]*?)(?=\n\d+[.、\)]|$)/gm;
+  const matches = [...filteredContent.matchAll(stepPattern)];
+  
+  if (matches.length > 0) {
+    console.log(`✅ 找到 ${matches.length} 个普通编号步骤`);
+    
+    matches.forEach(match => {
+      const stepNum = parseInt(match[1]);
+      let content = match[2].trim();
+      
+      // 清理但保留数学内容
+      content = content
+        .replace(/\s+/g, ' ')
+        .replace(/^步骤[:：]?\s*/i, '')
+        .trim();
+      
+      if (content.length > 15 && hasMathOperation(content)) {
+        steps[stepNum - 1] = content;
+        console.log(`📝 提取普通步骤 ${stepNum}: ${content.substring(0, 80)}...`);
+      }
+    });
+    
+    const validSteps = steps.filter(step => step && step.length > 0);
+    if (validSteps.length > 0) {
+      console.log(`✅ 成功提取 ${validSteps.length} 个普通步骤`);
+      return validSteps;
+    }
+  }
+  
+  // 4. 提取包含数学公式的段落
+  const mathParagraphs = aiContent
     .split('\n\n')
     .map(p => p.trim())
-    .filter(p => p.length > 20 && isValidMathStep(p));
+    .filter(p => p.length > 30 && (p.includes('=') || p.includes('$') || /\d+/.test(p)))
+    .filter(p => !p.startsWith('**最终答案') && !p.startsWith('**验证'));
   
-  if (paragraphs.length >= 2) {
-    const cleanedParagraphs = paragraphs
-      .map(p => cleanStepContent(p))
-      .filter(p => p && p.length > 10);
+  if (mathParagraphs.length >= 2) {
+    console.log(`✅ 找到 ${mathParagraphs.length} 个数学段落`);
+    const cleanedParagraphs = mathParagraphs
+      .map(p => p.replace(/\s+/g, ' ').trim())
+      .filter(p => p.length > 20);
     
     if (cleanedParagraphs.length > 0) {
-      console.log('✅ 使用智能过滤后的段落作为步骤');
+      console.log(`✅ 使用数学段落作为步骤`);
       return cleanedParagraphs.slice(0, 6);
     }
   }
   
-  // 4. 最后使用默认步骤（仅作为后备）
+  // 5. 最后使用默认步骤（仅作为后备）
   console.log('⚠️ 使用默认数学解题步骤');
   return [
     "理解题意：分析已知条件和求解目标",

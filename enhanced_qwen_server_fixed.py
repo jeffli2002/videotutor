@@ -219,7 +219,7 @@ class FixedQWENHandler(BaseHTTPRequestHandler):
                         }
                     )
                     
-                    with urllib.request.urlopen(req, timeout=30, context=ssl_context) as response:
+                    with urllib.request.urlopen(req, timeout=15, context=ssl_context) as response:
                         response_data = response.read().decode('utf-8')
                         print(f"✅ HTTP连接成功 (状态码: {response.code})")
                         
