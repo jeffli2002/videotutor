@@ -686,6 +686,7 @@ Format as JSON:
 
 /**
  * 智能提取和排序步骤，解决重复和顺序问题
+ * 增强过滤：移除标题、问题陈述、最终答案等非步骤内容
  * @param {string} aiContent - AI返回的完整内容
  * @returns {string[]} - 去重且排序后的步骤数组
  */
@@ -694,102 +695,405 @@ function extractAndSortSteps(aiContent) {
   
   const steps = [] // 使用数组确保顺序
   
-  // 1. 从整个内容提取详细步骤，确保能获取完整数学内容
-  console.log('🔍 从整个内容提取详细步骤...')
+  // 预过滤：移除明显的非步骤内容
+  let filteredContent = aiContent;
   
-  // 提取所有编号步骤，包括完整内容
-  const stepPattern = /(?:^|\n)(\d+)[.、\)]\s*([\s\S]*?)(?=\n\d+[.、\)]|$|\*\*)/gm
-  const matches = [...aiContent.matchAll(stepPattern)]
+  // 移除标题行
+  filteredContent = filteredContent.replace(/^#+.*?\n/gm, '');
+  filteredContent = filteredContent.replace(/^\*\*.*?\*\*\s*\n/gim, '');
+  filteredContent = filteredContent.replace(/^【.*?】\s*\n/gim, '');
+  
+  // 移除问题陈述部分
+  filteredContent = filteredContent.replace(/问题[：:]?.*?[\n\r]/gis, '');
+  filteredContent = filteredContent.replace(/题目[：:]?.*?[\n\r]/gis, '');
+  filteredContent = filteredContent.replace(/已知[：:]?.*?[\n\r]/gis, '');
+  filteredContent = filteredContent.replace(/求[：:]?.*?[\n\r]/gis, '');
+  
+  // 移除最终答案部分（通常作为独立步骤出现）
+  filteredContent = filteredContent.replace(/(?:最终)?答案[：:]?[\s\S]*?(?=\n\d+[.、\)]|$)/gis, '');
+  filteredContent = filteredContent.replace(/结论[：:]?[\s\S]*?(?=\n\d+[.、\)]|$)/gis, '');
+  filteredContent = filteredContent.replace(/结果[：:]?[\s\S]*?(?=\n\d+[.、\)]|$)/gis, '');
+  
+  // 1. 提取编号步骤，智能过滤
+  const stepPattern = /(?:^|\n)(\d+)[.、\)]\s*([\s\S]*?)(?=\n\d+[.、\)]|$|\*\*)/gm;
+  const matches = [...filteredContent.matchAll(stepPattern)];
   
   if (matches.length > 0) {
-    console.log(`✅ 找到 ${matches.length} 个步骤`)
+    console.log(`✅ 找到 ${matches.length} 个编号步骤`);
     
     matches.forEach(match => {
-      const stepNum = parseInt(match[1])
-      const content = match[2].trim()
+      const stepNum = parseInt(match[1]);
+      let content = match[2].trim();
       
-      if (content.length > 5) { // 降低最小长度要求，确保能获取步骤
-        steps[stepNum - 1] = content
-        console.log(`📝 提取步骤 ${stepNum}: ${content.substring(0, 80)}...`)
+      // 智能内容过滤
+      if (content.length > 10 && isValidMathStep(content)) {
+        // 清理步骤内容
+        content = cleanStepContent(content);
+        
+        if (content && content.length > 5) {
+          steps[stepNum - 1] = content;
+          console.log(`📝 提取步骤 ${stepNum}: ${content.substring(0, 80)}...`);
+        }
       }
-    })
+    });
     
-    const validSteps = steps.filter(step => step && step.length > 0)
+    const validSteps = steps.filter(step => step && step.length > 0);
     if (validSteps.length > 0) {
-      console.log(`✅ 成功提取 ${validSteps.length} 个详细步骤`)
-      return validSteps
+      console.log(`✅ 成功提取 ${validSteps.length} 个有效步骤`);
+      return validSteps;
     }
   }
   
-  // 2. 尝试提取包含数学内容的详细段落
-  if (matches.length > 0) {
-    const detailedSteps = matches.map(match => {
-      const content = match[2].trim()
-      return content
-    }).filter(content => content.length > 5)
+  // 2. 提取数学操作关键词的步骤
+  const mathStepKeywords = [
+    '计算', '求解', '代入', '化简', '展开', '合并', '移项',
+    '配方', '因式分解', '求导', '积分', '证明', '验证',
+    'calculate', 'solve', 'substitute', 'simplify', 'expand',
+    'combine', 'rearrange', 'factor', 'derive', 'integrate',
+    'prove', 'verify', 'compute'
+  ];
+  
+  const keywordPattern = new RegExp(
+    `(?:^|\\n)\\s*(\\d+)?[.、)]?\\s*(${mathStepKeywords.join('|')})[\\s\\S]*?(?=\\n\\d+[.、)]|$)`,
+    'gim'
+  );
+  
+  const keywordMatches = [...filteredContent.matchAll(keywordPattern)];
+  if (keywordMatches.length > 0) {
+    const mathSteps = keywordMatches.map((match, index) => {
+      let content = match[0].trim();
+      content = cleanStepContent(content);
+      return content;
+    }).filter(content => content && content.length > 10 && isValidMathStep(content));
     
-    if (detailedSteps.length > 0) {
-      console.log(`✅ 提取到 ${detailedSteps.length} 个详细步骤`)
-      return detailedSteps
+    if (mathSteps.length > 0) {
+      console.log(`✅ 提取到 ${mathSteps.length} 个数学操作步骤`);
+      return mathSteps.slice(0, 6);
     }
   }
   
-  // 3. 从内容中提取段落作为步骤
-  const paragraphs = aiContent.split('\n\n').filter(p => p.trim().length > 20)
+  // 3. 按段落提取，智能过滤
+  const paragraphs = filteredContent
+    .split('\n\n')
+    .map(p => p.trim())
+    .filter(p => p.length > 20 && isValidMathStep(p));
+  
   if (paragraphs.length >= 2) {
-    console.log('✅ 使用段落作为步骤')
-    return paragraphs.slice(0, 6) // 最多6个步骤
+    const cleanedParagraphs = paragraphs
+      .map(p => cleanStepContent(p))
+      .filter(p => p && p.length > 10);
+    
+    if (cleanedParagraphs.length > 0) {
+      console.log('✅ 使用智能过滤后的段落作为步骤');
+      return cleanedParagraphs.slice(0, 6);
+    }
   }
   
   // 4. 最后使用默认步骤（仅作为后备）
-  console.log('⚠️ 使用默认步骤')
+  console.log('⚠️ 使用默认数学解题步骤');
   return [
-    "理解题意：分析题目条件和要求",
+    "理解题意：分析已知条件和求解目标",
     "建立数学模型：根据题意列出方程或表达式", 
-    "逐步求解：使用数学方法求解",
-    "验证结果：检查答案是否正确",
-    "总结反思：回顾解题过程和方法"
-  ]
+    "选择解题方法：确定合适的数学工具和策略",
+    "逐步计算：按逻辑顺序进行数学运算",
+    "验证结果：检查答案的正确性和合理性"
+  ];
 }
 
 /**
- * 增强的去重机制，基于内容相似性判断
+ * 判断内容是否为有效的数学步骤
+ * @param {string} content - 待判断的内容
+ * @returns {boolean} - 是否为有效数学步骤
+ */
+function isValidMathStep(content) {
+  const invalidPatterns = [
+    /^问题[:：]?/i,
+    /^题目[:：]?/i,
+    /^已知[:：]?/i,
+    /^求[:：]?/i,
+    /^(最终)?答案[:：]?/i,
+    /^结论[:：]?/i,
+    /^结果[:：]?/i,
+    /^总结[:：]?/i,
+    /^反思[:：]?/i,
+    /^注意[:：]?/i,
+    /^提示[:：]?/i,
+    /^建议[:：]?/i,
+    /^第[一二三四五六七八九十]步[:：]?/i,
+    /^step\s*\d+[:：]?/i,
+    /^introduction/i,
+    /^conclusion/i,
+    /^overview/i,
+    /^summary/i
+  ];
+  
+  // 检查是否包含数学运算符号或数学关键词
+  const mathSymbols = /[=+\-*/×÷√²³∑∏∫∂∇≤≥≠≈±∞∈∩∪⊂⊃]/;
+  const mathKeywords = /方程|不等式|函数|导数|积分|极限|矩阵|向量|几何|代数|计算|求解|化简|展开|合并|移项/;
+  
+  const hasMathContent = mathSymbols.test(content) || mathKeywords.test(content);
+  const isInvalid = invalidPatterns.some(pattern => pattern.test(content.trim()));
+  
+  return hasMathContent && !isInvalid && content.length > 10;
+}
+
+/**
+ * 判断内容是否包含实际数学操作
+ * @param {string} content - 待判断的内容
+ * @returns {boolean} - 是否包含实际数学操作
+ */
+function hasMathOperation(content) {
+  if (!content || content.length < 10) return false;
+  
+  // 实际数学操作关键词和符号
+  const operationKeywords = [
+    // 基本运算
+    '计算', '求解', '代入', '化简', '展开', '合并', '移项', '移向', '除法', '乘法', '加法', '减法',
+    '加减', '乘除', '运算', '算式', '算得', '求得', '解得', '得到', '等于', '结果为',
+    
+    // 代数运算
+    '配方', '因式分解', '提取公因式', '完全平方', '平方差', '十字相乘', 
+    '求根公式', '判别式', '根与系数', '韦达定理',
+    
+    // 函数与方程
+    '解方程', '解不等式', '函数值', '定义域', '值域', '单调性', '奇偶性', '周期性',
+    
+    // 几何与三角
+    '勾股定理', '正弦定理', '余弦定理', '相似三角形', '全等三角形', '面积公式',
+    
+    // 微积分
+    '求导', '积分', '极限', '微分', '不定积分', '定积分',
+    
+    // 英文关键词
+    'calculate', 'solve', 'substitute', 'simplify', 'expand', 'combine', 'rearrange',
+    'factor', 'derive', 'integrate', 'prove', 'verify', 'compute', 'divide', 'multiply',
+    'add', 'subtract', 'reduce', 'evaluate', 'determine', 'find'
+  ];
+  
+  // 数学运算符号
+  const operationSymbols = /[=+\-*/×÷√²³∑∏∫∂∇≤≥≠≈±∞∈∩∪⊂⊃∆]/;
+  
+  // 数字和变量组合（表示实际计算）
+  const numberVariablePattern = /\d+[a-zA-Zα-ωΑ-Ω]|\d+\s*[+\-*/=×÷]|\d+\.\d+|[a-zA-Z]\s*=/;
+  
+  // 检查是否包含实际操作
+  const hasOperationKeyword = operationKeywords.some(keyword => 
+    content.toLowerCase().includes(keyword.toLowerCase())
+  );
+  
+  const hasOperationSymbol = operationSymbols.test(content);
+  const hasNumberOperation = numberVariablePattern.test(content);
+  
+  // 排除纯描述性内容
+  const isDescriptiveOnly = /^\s*(我们|首先|然后|接着|最后|注意|需要|应该|可以)\s*$/.test(content);
+  
+  return (hasOperationKeyword || hasOperationSymbol || hasNumberOperation) && !isDescriptiveOnly;
+}
+
+/**
+ * 清理步骤内容，移除冗余信息
+ * @param {string} content - 原始步骤内容
+ * @returns {string} - 清理后的步骤内容
+ */
+function cleanStepContent(content) {
+  if (!content) return '';
+  
+  let cleaned = content.trim();
+  
+  // 移除步骤编号前缀
+  cleaned = cleaned.replace(/^\s*\d+[.、)\s]+/, '');
+  cleaned = cleaned.replace(/^第[一二三四五六七八九十]+步[:：]?\s*/, '');
+  cleaned = cleaned.replace(/^step\s*\d+[:：]?\s*/i, '');
+  
+  // 移除markdown格式
+  cleaned = cleaned.replace(/\*\*/g, '');
+  cleaned = cleaned.replace(/\*\s*/g, '');
+  cleaned = cleaned.replace(/`\s*`/g, '');
+  
+  // 移除多余的空白字符
+  cleaned = cleaned.replace(/\s+/g, ' ');
+  cleaned = cleaned.replace(/^\s+|\s+$/g, '');
+  
+  return cleaned;
+}
+
+/**
+ * 增强的去重机制，基于数学内容指纹而非文本相似性
  * @param {string[]} steps - 原始步骤数组
  * @returns {string[]} - 去重后的步骤数组
  */
 function removeDuplicateSteps(steps) {
-  console.log('🧹 开始去重处理...')
+  console.log('🧹 开始智能数学内容去重处理...')
   
   const uniqueSteps = []
-  const seenContent = new Set()
+  const seenFingerprints = new Set()
   const duplicateCount = { count: 0, details: [] }
 
   for (const step of steps) {
     const cleanStep = step.trim()
     if (cleanStep && cleanStep.length > 5) {
-      // 使用更智能的去重算法：基于内容哈希而非前缀
-      const normalizedContent = normalizeForDeduplication(cleanStep)
-      const key = hashContent(normalizedContent)
+      // 使用数学内容指纹而非文本哈希
+      const fingerprint = generateMathFingerprint(cleanStep)
       
-      if (!seenContent.has(key)) {
+      if (!seenFingerprints.has(fingerprint)) {
         uniqueSteps.push(cleanStep)
-        seenContent.add(key)
-        console.log(`✅ 保留步骤: ${cleanStep.substring(0, 80)}...`)
+        seenFingerprints.add(fingerprint)
+        console.log(`✅ 保留数学步骤: ${cleanStep.substring(0, 80)}...`)
       } else {
         duplicateCount.count++
         duplicateCount.details.push(cleanStep.substring(0, 80))
-        console.log(`⚠️ 跳过重复步骤: ${cleanStep.substring(0, 80)}...`)
+        console.log(`⚠️ 跳过数学重复步骤: ${cleanStep.substring(0, 80)}...`)
       }
     }
   }
   
-  console.log(`📊 去重结果: 原始 ${steps.length} 个步骤，去重后 ${uniqueSteps.length} 个步骤，跳过 ${duplicateCount.count} 个重复`)
+  console.log(`📊 数学内容去重结果: 原始 ${steps.length} 个步骤，去重后 ${uniqueSteps.length} 个步骤，跳过 ${duplicateCount.count} 个重复`)
   
   return uniqueSteps
 }
 
 /**
- * 标准化内容用于去重判断
+ * 生成数学内容指纹，基于实际数学操作和概念
+ * @param {string} content - 原始内容
+ * @returns {string} - 数学内容指纹
+ */
+function generateMathFingerprint(content) {
+  // 1. 提取数学操作序列
+  const operations = extractMathOperations(content)
+  
+  // 2. 提取数学概念和变量
+  const concepts = extractMathConcepts(content)
+  
+  // 3. 提取数值特征
+  const values = extractNumericValues(content)
+  
+  // 4. 组合成内容指纹
+  const fingerprint = [
+    operations.join('|'),
+    concepts.join('|'),
+    values.join('|')
+  ].filter(part => part.length > 0).join('::')
+  
+  return fingerprint || content.substring(0, 100).toLowerCase()
+}
+
+/**
+ * 提取数学操作序列
+ * @param {string} content - 原始内容
+ * @returns {string[]} - 数学操作序列
+ */
+function extractMathOperations(content) {
+  const operations = []
+  const lowerContent = content.toLowerCase()
+  
+  // 基本运算操作
+  const basicOps = [
+    '加法', '减法', '乘法', '除法', '开方', '平方', '立方', '乘方',
+    'add', 'subtract', 'multiply', 'divide', 'sqrt', 'square', 'cube', 'power'
+  ]
+  
+  // 代数操作
+  const algebraOps = [
+    '代入', '化简', '展开', '合并', '移项', '配方', '因式分解', '求根',
+    'substitute', 'simplify', 'expand', 'combine', 'rearrange', 'complete', 'factor', 'solve'
+  ]
+  
+  // 微积分操作
+  const calculusOps = [
+    '求导', '积分', '极限', '微分', '不定积分', '定积分',
+    'derive', 'integrate', 'limit', 'differentiate', 'indefinite', 'definite'
+  ]
+  
+  // 方程操作
+  const equationOps = [
+    '解方程', '解不等式', '验证', '检查', '证明', '求解',
+    'solve equation', 'solve inequality', 'verify', 'check', 'prove'
+  ]
+  
+  const allOps = [...basicOps, ...algebraOps, ...calculusOps, ...equationOps]
+  
+  allOps.forEach(op => {
+    if (lowerContent.includes(op.toLowerCase())) {
+      operations.push(op)
+    }
+  })
+  
+  // 数学符号操作
+  const symbols = /[=+\-*/×÷√²³∑∏∫∂∇≤≥≠≈±]/g
+  const symbolMatches = content.match(symbols)
+  if (symbolMatches) {
+    operations.push(...symbolMatches.map(s => s.charCodeAt(0).toString()))
+  }
+  
+  return [...new Set(operations)].sort()
+}
+
+/**
+ * 提取数学概念和变量
+ * @param {string} content - 原始内容
+ * @returns {string[]} - 数学概念和变量
+ */
+function extractMathConcepts(content) {
+  const concepts = []
+  const lowerContent = content.toLowerCase()
+  
+  // 数学概念关键词
+  const mathConcepts = [
+    '方程', '函数', '导数', '积分', '矩阵', '向量', '几何', '代数',
+    '数列', '概率', '统计', '三角', '复数', '集合', '映射', '变换',
+    'equation', 'function', 'derivative', 'integral', 'matrix', 'vector', 
+    'geometry', 'algebra', 'sequence', 'probability', 'statistics', 'trigonometry',
+    'complex', 'set', 'mapping', 'transformation'
+  ]
+  
+  mathConcepts.forEach(concept => {
+    if (lowerContent.includes(concept.toLowerCase())) {
+      concepts.push(concept)
+    }
+  })
+  
+  // 提取变量名（如x, y, a1, b2等）
+  const variablePattern = /\b[a-zA-Z][0-9]*\b/g
+  const variables = content.match(variablePattern)
+  if (variables) {
+    concepts.push(...variables.filter(v => !['a', 'an', 'the', 'and', 'or', 'but'].includes(v.toLowerCase())))
+  }
+  
+  return [...new Set(concepts)].sort()
+}
+
+/**
+ * 提取数值特征
+ * @param {string} content - 原始内容
+ * @returns {string[]} - 数值特征
+ */
+function extractNumericValues(content) {
+  const values = []
+  
+  // 提取数字（包括小数和分数）
+  const numberPattern = /\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?/g
+  const numbers = content.match(numberPattern)
+  if (numbers) {
+    // 对数字进行标准化（保留2位小数）
+    values.push(...numbers.map(n => {
+      const num = parseFloat(n)
+      return isNaN(num) ? n : Math.round(num * 100) / 100
+    }))
+  }
+  
+  // 提取数学常数
+  const constants = ['π', 'e', '∞', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+  constants.forEach(constant => {
+    if (content.includes(constant)) {
+      values.push(constant)
+    }
+  })
+  
+  return [...new Set(values)].sort()
+}
+
+/**
+ * 标准化内容用于传统文本去重（作为后备方案）
  * @param {string} content - 原始内容
  * @returns {string} - 标准化后的内容
  */
@@ -803,7 +1107,7 @@ function normalizeForDeduplication(content) {
 }
 
 /**
- * 生成内容哈希值用于去重
+ * 生成内容哈希值用于传统去重（作为后备方案）
  * @param {string} content - 标准化后的内容
  * @returns {string} - 内容哈希
  */
@@ -1209,8 +1513,15 @@ export async function generateManimVideoFromQwen(qwenSteps, outputName = "qwen_v
       console.log(`📄 Manim API响应:`, data)
       
       if (data.success) {
-        console.log(`✅ Manim视频生成成功 (尝试 ${attempt}): ${data.video_url}`)
-        return data.video_url
+        console.log(`✅ Manim视频生成成功 (尝试 ${attempt}): ${data.video_path || data.video_url}`)
+        // 修复：优先使用video_path，如果没有则使用video_url
+        const videoPath = data.video_path || data.video_url;
+        // 确保返回的是以/rendered_videos/开头的路径
+        if (videoPath && !videoPath.startsWith('/rendered_videos/')) {
+          const fileName = videoPath.split(/[/\\]/).pop();
+          return `/rendered_videos/${fileName}`;
+        }
+        return videoPath;
       } else {
         throw new Error(data.error || "Manim渲染失败")
       }
