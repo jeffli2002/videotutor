@@ -696,7 +696,23 @@ function extractAndSortSteps(aiContent) {
   
   const steps = [] // 使用数组确保顺序
   
-  // 1. 首先尝试匹配实际AI响应格式："**步骤编号：1** 具体操作：... 详细解释：..."
+  // 1. 首先检查是否为模板/示例响应
+  const templateIndicators = [
+    "理解题意", "建立数学模型", "逐步计算", "验证结果",
+    "Please provide", "Format your response", "step-by-step solution",
+    "what we're doing", "mathematical operation", "result of this step"
+  ];
+  
+  const hasTemplateContent = templateIndicators.some(indicator => 
+    aiContent.toLowerCase().includes(indicator.toLowerCase())
+  );
+  
+  if (hasTemplateContent) {
+    console.log('⚠️ 检测到模板内容，跳过模板提取');
+    // 继续尝试提取实际内容
+  }
+  
+  // 2. 首先尝试匹配实际AI响应格式："**步骤编号：1** 具体操作：... 详细解释：..."
   const detailedStepPattern = /(?:^|\n)(\d+)[.、\)]?\s*(?:\*\*步骤编号：\1\*\*\s*\*\*具体操作：([^*]+)\*\*(?:\s*\*\*详细解释：([^*]+)\*\*)?(?:\s*\*\*中间结果：([^*]*)\*\*)?)?/gm;
   const detailedMatches = [...aiContent.matchAll(detailedStepPattern)];
   
@@ -717,7 +733,7 @@ function extractAndSortSteps(aiContent) {
         fullContent += '，计算结果：' + result.trim();
       }
       
-      if (fullContent.length > 10) {
+      if (fullContent.length > 10 && !isTemplateStep(fullContent)) {
         steps[stepNum - 1] = fullContent;
         console.log(`📝 提取详细步骤 ${stepNum}: ${fullContent.substring(0, 80)}...`);
       }
@@ -747,7 +763,7 @@ function extractAndSortSteps(aiContent) {
         fullContent += '：' + content;
       }
       
-      if (fullContent.length > 10) {
+      if (fullContent.length > 10 && !isTemplateStep(fullContent)) {
         steps[stepNum - 1] = fullContent;
         console.log(`📝 提取带标题步骤 ${stepNum}: ${fullContent.substring(0, 80)}...`);
       }
@@ -784,7 +800,7 @@ function extractAndSortSteps(aiContent) {
         .replace(/^步骤[:：]?\s*/i, '')
         .trim();
       
-      if (content.length > 15 && hasMathOperation(content)) {
+      if (content.length > 15 && hasMathOperation(content) && !isTemplateStep(content)) {
         steps[stepNum - 1] = content;
         console.log(`📝 提取普通步骤 ${stepNum}: ${content.substring(0, 80)}...`);
       }
@@ -828,11 +844,25 @@ function extractAndSortSteps(aiContent) {
       const hasMath = /[\+\-\=\×\÷\√\d\$\^\_\{\}\\]/.test(p) || 
                      /(计算|求解|化简|展开|合并|移项|代入|方程|函数|导数|积分)/.test(p) ||
                      /(calculate|solve|simplify|equation|function|derivative|integrate)/i.test(p);
+      
+      // 更严格的内容过滤，排除模板和示例
+      const isTemplateContent = [
+        "理解题意", "建立数学模型", "逐步计算", "验证结果",
+        "分析已知条件", "列出方程", "移项求解", "计算得出结果",
+        "检查答案的正确性", "请用中文逐步解决这个数学问题",
+        "Solve this math problem step by step",
+        "Please provide", "Format your response", "what we're doing",
+        "mathematical operation", "result of this step", "why we do this"
+      ].some(template => p.toLowerCase().includes(template.toLowerCase()));
+      
       const notHeader = !p.startsWith('**最终答案') && 
                         !p.startsWith('**验证') && 
                         !p.startsWith('**总结') &&
-                        !p.startsWith('**结论');
-      return hasMath && notHeader;
+                        !p.startsWith('**结论') &&
+                        !p.toLowerCase().includes("template") &&
+                        !p.toLowerCase().includes("example");
+      
+      return hasMath && notHeader && !isTemplateContent;
     });
   
   if (paragraphs.length >= 2) {
@@ -849,7 +879,15 @@ function extractAndSortSteps(aiContent) {
       const hasMath = /[\+\-\=\×\÷\√\d]/.test(s) || 
                      /(计算|求解|方程|公式|定理)/.test(s) ||
                      /(calculate|solve|equation|formula|theorem)/i.test(s);
-      return hasMath;
+      
+      // 排除模板句子
+      const isTemplateSentence = [
+        "理解题意", "分析已知条件", "建立数学模型", "逐步计算", "验证结果",
+        "请按照以下格式", "Please provide", "step by step",
+        "what we're doing", "mathematical operation", "result of this step"
+      ].some(template => s.toLowerCase().includes(template.toLowerCase()));
+      
+      return hasMath && !isTemplateSentence;
     });
   
   if (sentences.length >= 2) {
@@ -857,14 +895,62 @@ function extractAndSortSteps(aiContent) {
     return sentences.slice(0, 6);
   }
   
-  // 7. 最后使用默认步骤（仅作为最终后备）
-  console.log('⚠️ 使用默认数学解题步骤');
-  return [
-    "理解题意：分析已知条件和求解目标",
-    "建立数学模型：根据题意列出方程或表达式", 
-    "逐步计算：按逻辑顺序进行数学运算",
-    "验证结果：检查答案的正确性和合理性"
+  // 7. 最终后备 - 从内容中智能提取实际数学内容
+  console.log('🔍 最终后备：智能提取实际数学内容...');
+  
+  // 提取所有包含数学运算的实际内容
+  const mathOperations = aiContent
+    .split(/\n+|\s{2,}/)
+    .map(line => line.trim())
+    .filter(line => {
+      const hasMathContent = /[\+\-\=\×\÷\√\d]/.test(line) || 
+                           /(计算|求解|方程|公式|定理|代入|化简)/.test(line) ||
+                           /(calculate|solve|equation|formula|substitute|simplify)/i.test(line);
+      const isNotTemplate = !line.includes("理解题意") && 
+                           !line.includes("建立数学模型") &&
+                           !line.includes("逐步计算") &&
+                           !line.includes("验证结果");
+      return line.length > 15 && hasMathContent && isNotTemplate;
+    });
+
+  if (mathOperations.length >= 2) {
+    console.log(`✅ 从内容中提取到 ${mathOperations.length} 个实际数学操作`);
+    return mathOperations.slice(0, 4);
+  }
+
+  // 8. 避免返回模板内容，返回实际内容或错误提示
+  console.log('⚠️ 无法提取有效数学步骤，返回标记而非模板');
+  return ["[无法从响应中提取有效步骤，请检查AI响应格式]"];
+}
+
+/**
+ * 判断内容是否为模板步骤（而非实际解题步骤）
+ * @param {string} content - 待判断的内容
+ * @returns {boolean} - 是否为模板内容
+ */
+function isTemplateStep(content) {
+  if (!content) return true;
+  
+  const templatePatterns = [
+    /理解题意[:：]/i,
+    /建立数学模型[:：]/i,
+    /逐步计算[:：]/i,
+    /验证结果[:：]/i,
+    /分析已知条件[:：]/i,
+    /列出方程[:：]/i,
+    /移项求解[:：]/i,
+    /计算得出结果[:：]/i,
+    /检查答案[:：]/i,
+    /请用中文逐步解决这个数学问题/i,
+    /solve this math problem step by step/i,
+    /please provide.*step.*step/i,
+    /format your response/i,
+    /what we're doing.*operation.*result/i,
+    /mathematical operation.*result of this step/i,
+    /step \d+[:：]?\s*(理解|分析|建立|计算|验证)/i
   ];
+  
+  return templatePatterns.some(pattern => pattern.test(content));
 }
 
 /**
