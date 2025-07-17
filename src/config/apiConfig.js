@@ -5,7 +5,7 @@ const config = getConfig();
 
 // API配置
 export const API_BASE_URL = config.apiBaseUrl;
-export const QWEN_API_URL = config.qwenApiUrl;
+export const QWEN_API_URL = 'http://localhost:8002/api/qwen'; // 使用增强服务器
 export const QWEN_API_KEY = import.meta.env.VITE_QWEN_API_KEY || '';
 
 // 环境变量配置模板
