@@ -96,26 +96,87 @@ export class MathVideoAIService {
     const prompt = this.buildMathSolvingPrompt(question, language, difficulty)
     
     try {
-      let response
+      let aiResponse
       if (useQwen) {
-        response = await this.callQwenAPI(prompt)
+        aiResponse = await this.callQwenAPI(prompt)
       } else {
-        response = await this.callOpenAIAPI(prompt)
+        aiResponse = await this.callOpenAIAPI(prompt)
       }
+      
+      console.log('📝 AI原始响应:', aiResponse.substring(0, 200) + '...')
+      
+      // 尝试解析JSON响应
+      let parsedResponse
+      try {
+        parsedResponse = JSON.parse(aiResponse)
+      } catch (parseError) {
+        console.log('⚠️ JSON解析失败，使用文本解析模式')
+        // 如果JSON解析失败，使用文本解析
+        parsedResponse = this.parseTextResponse(aiResponse, question)
+      }
+      
+      // 提取和优化步骤
+      let steps = []
+      if (parsedResponse.steps && Array.isArray(parsedResponse.steps)) {
+        // 如果是结构化步骤，转换为文本格式
+        steps = parsedResponse.steps.map(step => {
+          if (typeof step === 'object') {
+            return `${step.stepNumber || ''}. **${step.description || ''}** ${step.operation || ''} ${step.result || ''} ${step.explanation || ''}`
+          }
+          return step
+        })
+      } else {
+        // 从文本中提取步骤
+        steps = extractAndSortSteps(aiResponse)
+      }
+      
+      // 去重处理
+      steps = removeDuplicateSteps(steps)
+      
+      console.log('📊 最终步骤数量:', steps.length)
+      steps.forEach((step, index) => {
+        console.log(`步骤 ${index + 1}: ${step.substring(0, 50)}...`)
+      })
       
       return {
         originalQuestion: question,
         language,
-        solution: response.solution,
-        steps: response.steps,
-        explanation: response.explanation,
-        topics: response.topics,
-        difficulty: response.assessedDifficulty,
-        alternativeMethods: response.alternatives || []
+        solution: parsedResponse.solution || '答案已包含在步骤中',
+        steps: steps,
+        explanation: parsedResponse.explanation || aiResponse,
+        topics: parsedResponse.topics || ['数学'],
+        difficulty: parsedResponse.assessedDifficulty || difficulty,
+        alternativeMethods: parsedResponse.alternatives || [],
+        rawResponse: aiResponse
       }
     } catch (error) {
+      console.error('❌ 数学问题求解失败:', error)
       throw new Error(`Math solving failed: ${error.message}`)
     }
+  }
+  
+  parseTextResponse(text, question) {
+    // 从文本响应中提取结构化信息
+    const result = {
+      solution: '',
+      explanation: text,
+      topics: ['数学'],
+      assessedDifficulty: 'intermediate'
+    }
+    
+    // 尝试提取最终答案
+    const answerMatch = text.match(/\*\*最终答案\*\*\s*([\s\S]*?)(?=\*\*|$)/)
+    if (answerMatch) {
+      result.solution = answerMatch[1].trim()
+    }
+    
+    // 尝试提取数学主题
+    const topicsMatch = text.match(/\*\*相关数学概念\*\*\s*([\s\S]*?)(?=\*\*|$)/)
+    if (topicsMatch) {
+      result.topics = topicsMatch[1].split(/[,，、]/).map(t => t.trim()).filter(t => t)
+    }
+    
+    return result
   }
 
   buildMathSolvingPrompt(question, language, difficulty) {
@@ -164,35 +225,70 @@ Format your response as JSON with the following structure:
   }
 
   async callQwenAPI(prompt) {
-    const response = await fetch(`${this.config.qwen.baseUrl}/services/aigc/text-generation/generation`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.config.qwen.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'qwen-plus', // 性价比最高的模型
-        input: {
+    try {
+      // 首先尝试使用本地增强服务器
+      const localResponse = await fetch('http://localhost:8002/api/qwen', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
           messages: [
             {
               role: 'system',
-              content: '你是一个专业的数学老师，擅长用清晰的中文解释数学概念和解题步骤。'
+              content: '你是一个专业的数学老师，擅长用清晰的中文解释数学概念和解题步骤。请按照以下格式提供非常详细的解题步骤，每个步骤都要包含具体的操作和解释：\n\n**详细解题步骤**\n1. **理解题目** 仔细阅读题目，明确已知条件和要求求解的内容。分析题目中的关键词和数学概念。\n2. **确定解题思路** 根据题目类型选择合适的解题方法，列出解题的整体思路和步骤。\n3. **列出公式或方程** 根据数学原理，写出相关的公式、方程或不等式。\n4. **代入已知条件** 将题目中的具体数值代入公式或方程中。\n5. **逐步计算** 按照数学运算规则，一步一步进行计算，每步都要写出具体的计算过程。\n6. **得出结果** 完成所有计算后，得出最终答案。\n7. **验证答案** 检查计算过程是否正确，验证答案是否符合题目要求。\n\n**最终答案**\n[具体数值和单位]\n\n**相关数学概念**\n[涉及的所有数学概念和公式]\n\n**常见错误提醒**\n[学生容易犯的错误和注意事项]'
             },
             {
               role: 'user',
               content: prompt
             }
-          ]
-        },
-        parameters: {
-          temperature: 0.1, // 确保数学答案的准确性
-          max_tokens: 2000
-        }
+          ],
+          max_tokens: 2000,
+          temperature: 0.1
+        })
       })
-    })
-    
-    const data = await response.json()
-    return JSON.parse(data.output.text)
+      
+      if (localResponse.ok) {
+        const localData = await localResponse.json()
+        console.log('✅ 本地QWEN服务器响应成功')
+        return localData.output.text
+      } else {
+        throw new Error('本地服务器响应失败')
+      }
+    } catch (localError) {
+      console.log('⚠️ 本地服务器不可用，尝试直接调用QWEN API')
+      
+      // 备用方案：直接调用QWEN API
+      const response = await fetch(`${this.config.qwen.baseUrl}/services/aigc/text-generation/generation`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.config.qwen.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'qwen-plus',
+          input: {
+            messages: [
+              {
+                role: 'system',
+                content: '你是一个专业的数学老师，擅长用清晰的中文解释数学概念和解题步骤。请按照以下格式提供非常详细的解题步骤，每个步骤都要包含具体的操作和解释：\n\n**详细解题步骤**\n1. **理解题目** 仔细阅读题目，明确已知条件和要求求解的内容。分析题目中的关键词和数学概念。\n2. **确定解题思路** 根据题目类型选择合适的解题方法，列出解题的整体思路和步骤。\n3. **列出公式或方程** 根据数学原理，写出相关的公式、方程或不等式。\n4. **代入已知条件** 将题目中的具体数值代入公式或方程中。\n5. **逐步计算** 按照数学运算规则，一步一步进行计算，每步都要写出具体的计算过程。\n6. **得出结果** 完成所有计算后，得出最终答案。\n7. **验证答案** 检查计算过程是否正确，验证答案是否符合题目要求。\n\n**最终答案**\n[具体数值和单位]\n\n**相关数学概念**\n[涉及的所有数学概念和公式]\n\n**常见错误提醒**\n[学生容易犯的错误和注意事项]'
+              },
+              {
+                role: 'user',
+                content: prompt
+              }
+            ]
+          },
+          parameters: {
+            temperature: 0.1,
+            max_tokens: 2000
+          }
+        })
+      })
+      
+      const data = await response.json()
+      return data.output.text
+    }
   }
 
   async callOpenAIAPI(prompt) {
@@ -589,6 +685,138 @@ Format as JSON:
 }
 
 /**
+ * 智能提取和排序步骤，解决重复和顺序问题
+ * @param {string} aiContent - AI返回的完整内容
+ * @returns {string[]} - 去重且排序后的步骤数组
+ */
+function extractAndSortSteps(aiContent) {
+  console.log('🔍 开始智能步骤提取...')
+  
+  const steps = [] // 使用数组确保顺序
+  
+  // 1. 只从"详细解题步骤"块提取，避免全局污染
+  const detailBlockMatch = aiContent.match(/\*\*详细解题步骤\*\*\s*([\s\S]*?)(?=\*\*最终答案\*\*|$)/)
+  
+  if (detailBlockMatch) {
+    const detailBlock = detailBlockMatch[1]
+    console.log('📋 找到详细解题步骤块，长度:', detailBlock.length)
+    
+    // 使用精确的单一步骤提取模式
+    const stepPattern = /(\d+)[.、\)]\s*(?:\*\*([^*]+?)\*\*)?\s*([\s\S]*?)(?=\n\s*\d+[.、\)]|$)/g
+    
+    const matches = [...detailBlock.matchAll(stepPattern)]
+    if (matches.length > 0) {
+      console.log(`✅ 匹配到 ${matches.length} 个步骤`)
+      
+      // 直接按编号放置到正确位置
+      matches.forEach(match => {
+        const stepNum = parseInt(match[1]) - 1 // 转换为0-based索引
+        const title = (match[2] || '').trim()
+        const content = (match[3] || '').trim()
+        
+        let stepContent = title ? `**${title}** ${content}` : content
+        stepContent = stepContent.replace(/\n\s*\n/g, '\n').trim()
+        
+        if (stepContent.length > 10) {
+          steps[stepNum] = stepContent
+        }
+      })
+    }
+  }
+  
+  // 移除空位并返回有序步骤
+  const validSteps = steps.filter(step => step && step.length > 0)
+  
+  if (validSteps.length > 0) {
+    console.log(`✅ 成功提取 ${validSteps.length} 个排序步骤`)
+    return validSteps
+  }
+  
+  // 如果未找到详细步骤块，使用简化提取
+  console.log('🔄 未找到详细步骤块，使用简化提取...')
+  const simplePattern = /(?:步骤|step)\s*(\d+)[.:：\s]+([^\n]+)/gi
+  const simpleMatches = [...aiContent.matchAll(simplePattern)]
+  
+  if (simpleMatches.length > 0) {
+    const simpleSteps = simpleMatches.map(match => match[2].trim()).filter(s => s.length > 5)
+    if (simpleSteps.length > 0) {
+      console.log(`✅ 简化提取到 ${simpleSteps.length} 个步骤`)
+      return simpleSteps
+    }
+  }
+  
+  // 最后使用默认步骤
+  console.log('⚠️ 使用默认步骤')
+  return [
+    "分析题目条件",
+    "列出方程或不等式", 
+    "移项求解",
+    "计算得出结果",
+    "验证答案"
+  ]
+}
+
+/**
+ * 增强的去重机制，基于内容相似性判断
+ * @param {string[]} steps - 原始步骤数组
+ * @returns {string[]} - 去重后的步骤数组
+ */
+function removeDuplicateSteps(steps) {
+  console.log('🧹 开始去重处理...')
+  
+  const uniqueSteps = []
+  const seenContent = new Set()
+  const duplicateCount = { count: 0, details: [] }
+
+  for (const step of steps) {
+    const cleanStep = step.trim()
+    if (cleanStep && cleanStep.length > 5) {
+      // 使用更智能的去重算法：基于内容哈希而非前缀
+      const normalizedContent = normalizeForDeduplication(cleanStep)
+      const key = hashContent(normalizedContent)
+      
+      if (!seenContent.has(key)) {
+        uniqueSteps.push(cleanStep)
+        seenContent.add(key)
+        console.log(`✅ 保留步骤: ${cleanStep.substring(0, 80)}...`)
+      } else {
+        duplicateCount.count++
+        duplicateCount.details.push(cleanStep.substring(0, 80))
+        console.log(`⚠️ 跳过重复步骤: ${cleanStep.substring(0, 80)}...`)
+      }
+    }
+  }
+  
+  console.log(`📊 去重结果: 原始 ${steps.length} 个步骤，去重后 ${uniqueSteps.length} 个步骤，跳过 ${duplicateCount.count} 个重复`)
+  
+  return uniqueSteps
+}
+
+/**
+ * 标准化内容用于去重判断
+ * @param {string} content - 原始内容
+ * @returns {string} - 标准化后的内容
+ */
+function normalizeForDeduplication(content) {
+  return content
+    .toLowerCase()
+    .replace(/\s+/g, ' ') // 统一空格
+    .replace(/[,.，。！？；：\-]/g, '') // 移除标点
+    .replace(/\*\*/g, '') // 移除markdown标记
+    .trim()
+}
+
+/**
+ * 生成内容哈希值用于去重
+ * @param {string} content - 标准化后的内容
+ * @returns {string} - 内容哈希
+ */
+function hashContent(content) {
+  // 使用内容的前200字符作为哈希，避免过于敏感
+  return content.substring(0, 200)
+}
+
+/**
  * 将Qwen分步讲解脚本转为优化的Manim Python代码（避免超时）
  * @param {string[]} qwenSteps - Qwen API返回的分步讲解数组
  * @param {string} sceneName - Manim场景名
@@ -597,8 +825,28 @@ Format as JSON:
 export function buildManimScriptFromQwen(qwenSteps, sceneName = "MathSolutionScene") {
   console.log('🎬 开始构建Manim脚本，原始步骤:', qwenSteps)
   
+  // 如果传入的是字符串（AI完整响应），先提取步骤
+  let steps = qwenSteps
+  if (typeof qwenSteps === 'string') {
+    console.log('📝 检测到字符串输入，开始提取步骤...')
+    steps = extractAndSortSteps(qwenSteps)
+  } else if (Array.isArray(qwenSteps)) {
+    console.log('📝 检测到数组输入，直接处理步骤...')
+    // 对数组进行去重处理
+    steps = removeDuplicateSteps(qwenSteps)
+  } else {
+    console.log('⚠️ 无效的输入格式，使用默认步骤')
+    steps = [
+      "分析题目条件",
+      "列出方程或不等式", 
+      "移项求解",
+      "计算得出结果",
+      "验证答案"
+    ]
+  }
+  
   // 智能步骤处理和排序
-  let cleanedSteps = qwenSteps
+  let cleanedSteps = steps
     .filter(step => step && step.trim())
     .map((step, index) => ({
       content: step.trim(),
@@ -606,15 +854,15 @@ export function buildManimScriptFromQwen(qwenSteps, sceneName = "MathSolutionSce
     }))
     .filter(step => step.content.length > 0);
 
-  // 增强的去重逻辑：基于内容相似性而不是完全匹配
+  // 进一步去重和优化
   const uniqueSteps = [];
   const seenContent = new Set();
   
   for (const step of cleanedSteps) {
     const cleanContent = step.content.trim()
     if (cleanContent.length > 10) {
-      // 使用前60个字符作为去重依据，提高准确性
-      const key = cleanContent.substring(0, 60).toLowerCase().replace(/\s+/g, ' ')
+      // 使用前80个字符作为去重依据，提高准确性
+      const key = cleanContent.substring(0, 80).toLowerCase().replace(/\s+/g, ' ')
       if (!seenContent.has(key)) {
         uniqueSteps.push(step)
         seenContent.add(key)
@@ -626,7 +874,7 @@ export function buildManimScriptFromQwen(qwenSteps, sceneName = "MathSolutionSce
   }
   
   // 保持原始顺序，但限制最大步骤数
-  const maxSteps = 8;
+  const maxSteps = 6; // 减少最大步骤数，提高渲染稳定性
   if (uniqueSteps.length > maxSteps) {
     console.log(`📊 步骤数量过多 (${uniqueSteps.length})，截取前${maxSteps}个步骤`)
     uniqueSteps.splice(maxSteps)
@@ -638,18 +886,18 @@ export function buildManimScriptFromQwen(qwenSteps, sceneName = "MathSolutionSce
   // 进一步优化步骤，确保渲染稳定性和专业性
   cleanedSteps = cleanedSteps.map((step, index) => {
     // 智能长度控制，保持内容完整性
-    if (step.length > 800) {
+    if (step.length > 600) { // 减少最大长度，提高渲染稳定性
       // 尝试在句号处截断，保持语义完整
       const sentences = step.split(/[。！？.!?]/);
       let truncated = '';
       for (const sentence of sentences) {
-        if ((truncated + sentence).length <= 797) {
+        if ((truncated + sentence).length <= 597) {
           truncated += sentence + '。';
         } else {
           break;
         }
       }
-      step = truncated || step.substring(0, 797) + "...";
+      step = truncated || step.substring(0, 597) + "...";
     }
     
     // 移除可能导致渲染问题的字符，但保留数学符号
@@ -665,9 +913,9 @@ export function buildManimScriptFromQwen(qwenSteps, sceneName = "MathSolutionSce
   });
   
   // 验证步骤数量，确保渲染稳定性
-  if (cleanedSteps.length > 8) {
-    console.log(`📊 步骤数量过多 (${cleanedSteps.length})，截取前8个步骤`);
-    cleanedSteps = cleanedSteps.slice(0, 8);
+  if (cleanedSteps.length > 6) {
+    console.log(`📊 步骤数量过多 (${cleanedSteps.length})，截取前6个步骤`);
+    cleanedSteps = cleanedSteps.slice(0, 6);
   }
 
   console.log('🧹 清理后的步骤（去重后顺序）:', cleanedSteps)
@@ -690,8 +938,10 @@ export function buildManimScriptFromQwen(qwenSteps, sceneName = "MathSolutionSce
     ].slice(0, maxSteps)
     console.log('🔄 使用默认步骤:', cleanedSteps)
   }
+  
   // 转换步骤为Python列表格式
   const stepsStr = JSON.stringify(cleanedSteps);
+  
   // 生成优化的Manim代码 - 增强稳定性和性能
   const script = `from manim import *
 import warnings
@@ -725,7 +975,7 @@ class ${sceneName}(Scene):
                 print(f"步骤 {i+1}: {step[:50]}...")
             
             # 限制最大步骤数，确保渲染稳定性
-            max_steps = min(len(steps), 8)
+            max_steps = min(len(steps), 6)
             steps = steps[:max_steps]
             
             previous_text = None
@@ -749,10 +999,10 @@ class ${sceneName}(Scene):
                     self.play(Write(step_content), run_time=1.2)
                     
                     # 智能等待时间，根据内容长度和复杂度调整
-                    base_wait = 8.0  # 基础等待时间
-                    content_factor = len(step_text) * 0.06  # 内容长度因子
-                    complexity_factor = step_text.count('=') * 0.5  # 数学公式复杂度因子
-                    wait_time = min(max(base_wait, content_factor + complexity_factor), 20.0)
+                    base_wait = 6.0  # 减少基础等待时间
+                    content_factor = len(step_text) * 0.04  # 减少内容长度因子
+                    complexity_factor = step_text.count('=') * 0.3  # 减少数学公式复杂度因子
+                    wait_time = min(max(base_wait, content_factor + complexity_factor), 15.0) # 减少最大等待时间
                     
                     print(f"步骤 {i+1} 等待时间: {wait_time:.1f}秒")
                     self.wait(wait_time)
@@ -785,71 +1035,40 @@ class ${sceneName}(Scene):
         try:
             # 清理文本
             text = text.strip()
-            if len(text) > 600:
-                text = text[:597] + "..."
+            if len(text) > 400: # 减少最大长度
+                text = text[:397] + "..."
             
-            # 按长度选择显示策略
-            if len(text) <= 80:
-                # 短文本直接显示
-                return Text(text, font_size=18, color=BLACK, weight=NORMAL).next_to(step_num, DOWN, buff=0.5)
+            # 分割长文本为多行
+            if len(text) > 100:
+                lines = []
+                current_line = ""
+                words = text.split(' ')
+                
+                for word in words:
+                    if (current_line + word).length <= 50:
+                        current_line += word + " "
+                    else:
+                        if current_line:
+                            lines.append(current_line.strip())
+                        current_line = word + " "
+                
+                if current_line:
+                    lines.append(current_line.strip())
+                
+                # 创建多行文本组
+                text_group = VGroup()
+                for i, line in enumerate(lines):
+                    line_text = Text(line, font_size=16, color=BLACK, weight=NORMAL)
+                    line_text.next_to(step_num, DOWN, buff=0.5 + i * 0.4)
+                    text_group.add(line_text)
+                
+                return text_group
             else:
-                # 长文本分行显示
-                return self.create_multiline_text(text, step_num)
+                return Text(text, font_size=16, color=BLACK).next_to(step_num, DOWN, buff=0.5)
                 
         except Exception as e:
             print(f"创建步骤内容失败: {e}")
-            return Text("步骤内容", font_size=16, color=BLACK).next_to(step_num, DOWN, buff=0.5)
-    
-    def create_multiline_text(self, text, step_num):
-        """创建多行文本"""
-        try:
-            import re
-            
-            # 按标点符号分句
-            sentences = re.split(r'[。！？；;.!?]', text)
-            sentences = [s.strip() for s in sentences if s.strip()]
-            
-            # 创建文本组
-            text_group = VGroup()
-            current_y = 0
-            max_lines = 15  # 增加最大行数，提高内容显示能力
-            
-            for sentence in sentences:
-                if current_y >= max_lines:
-                    break
-                    
-                # 分行处理 - 更智能的分行策略
-                if len(sentence) > 60:
-                    lines = []
-                    while len(sentence) > 60 and current_y < max_lines:
-                        # 尝试在合适的位置分行
-                        break_point = 60
-                        for i in range(55, min(65, len(sentence))):
-                            if sentence[i] in ['，', ',', ' ', '=']:
-                                break_point = i + 1
-                                break
-                        lines.append(sentence[:break_point])
-                        sentence = sentence[break_point:]
-                        current_y += 1
-                    if sentence and current_y < max_lines:
-                        lines.append(sentence)
-                        current_y += 1
-                else:
-                    lines = [sentence]
-                    current_y += 1
-                
-                # 创建文本对象 - 更专业的样式
-                for line in lines:
-                    if current_y <= max_lines:
-                        line_text = Text(line, font_size=14, color=BLACK, weight=NORMAL)
-                        line_text.next_to(step_num, DOWN, buff=0.5 + (current_y - 1) * 0.35)
-                        text_group.add(line_text)
-            
-            return text_group
-            
-        except Exception as e:
-            print(f"创建多行文本失败: {e}")
-            return Text(text[:80] + "...", font_size=14, color=BLACK).next_to(step_num, DOWN, buff=0.5)
+            return Text(text[:60] + "...", font_size=16, color=BLACK).next_to(step_num, DOWN, buff=0.5)
 `
   return script;
 }
@@ -913,8 +1132,37 @@ function cleanTextForManim(text) {
  * @returns {Promise<string>} - 返回mp4视频URL
  */
 export async function generateManimVideoFromQwen(qwenSteps, outputName = "qwen_video1") {
+  console.log('🎬 开始生成Manim视频，输入步骤:', qwenSteps)
+  
   // 智能优化步骤内容，减少渲染复杂度
-  const optimizedSteps = optimizeStepsForManim(qwenSteps);
+  let optimizedSteps
+  if (typeof qwenSteps === 'string') {
+    // 如果是字符串（AI完整响应），先提取步骤
+    console.log('📝 检测到字符串输入，开始提取步骤...')
+    optimizedSteps = extractAndSortSteps(qwenSteps)
+  } else if (Array.isArray(qwenSteps)) {
+    // 如果是数组，直接优化
+    console.log('📝 检测到数组输入，直接优化步骤...')
+    optimizedSteps = optimizeStepsForManim(qwenSteps)
+  } else {
+    console.log('⚠️ 无效的输入格式，使用默认步骤')
+    optimizedSteps = [
+      "分析题目条件",
+      "列出方程或不等式", 
+      "移项求解",
+      "计算得出结果",
+      "验证答案"
+    ]
+  }
+  
+  // 去重处理
+  optimizedSteps = removeDuplicateSteps(optimizedSteps)
+  
+  console.log('📊 优化后的步骤数量:', optimizedSteps.length)
+  optimizedSteps.forEach((step, index) => {
+    console.log(`优化步骤 ${index + 1}: ${step.substring(0, 50)}...`)
+  })
+  
   const manimScript = buildManimScriptFromQwen(optimizedSteps)
   
   // 实现重试机制和渐进式超时
