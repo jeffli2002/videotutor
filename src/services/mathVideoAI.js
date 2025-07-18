@@ -179,47 +179,164 @@ export class MathVideoAIService {
     return result
   }
 
+  detectProblemComplexity(question) {
+    // 检测问题复杂度以决定使用哪种格式
+    const complexPatterns = [
+      /integral|积分|∫/i,
+      /derivative|导数|微分/i,
+      /matrix|矩阵/i,
+      /limit|极限/i,
+      /sum|∑|sigma/i,
+      /product|∏|pi/i,
+      /sqrt|根号|√[^)]*\)|\^{[^{}]*}/,
+      /frac|\frac{[^{}]*}{[^{}]*}/,
+      /[∑∏∫∂∇∆∞∈∉⊂⊃⊆⊇∩∪]/,
+      /\$\$.*?\$\$/,  // 双美元符号LaTeX
+      /\\\[.*?\\\]/  // 方括号LaTeX
+    ]
+    
+    const complexityScore = complexPatterns.reduce((score, pattern) => {
+      return score + (pattern.test(question) ? 1 : 0)
+    }, 0)
+    
+    return {
+      complexity: complexityScore > 0 ? 'complex' : 'simple',
+      score: complexityScore,
+      useLaTeX: complexityScore > 0,
+      format: complexityScore > 0 ? 'latex' : 'plain'
+    }
+  }
+
+  detectProblemType(question) {
+    const problemTypes = {
+      'equation': /方程|equation|solve|解|=/i,
+      'geometry': /几何|geometry|三角形|面积|体积|图形|length|area|volume|angle/i,
+      'algebra': /代数|algebra|多项式|polynomial|因式分解|factor/i,
+      'calculus': /微积分|calculus|积分|integral|导数|derivative|极限|limit/i,
+      'statistics': /统计|statistics|概率|probability|平均|mean|方差|variance/i,
+      'trigonometry': /三角|trigonometry|sin|cos|tan|角度|angle/i,
+      'matrix': /矩阵|matrix|行列式|determinant/i,
+      'sequence': /数列|sequence|级数|series|等差|等比/i
+    }
+    
+    for (const [type, pattern] of Object.entries(problemTypes)) {
+      if (pattern.test(question)) {
+        return type
+      }
+    }
+    return 'general'
+  }
+
+  buildAdaptiveIntroduction(question, language, problemType, complexity) {
+    const introductions = {
+      'en': {
+        'equation': "Let's explore this equation together and discover how to find its solution through clear visualization and logical steps.",
+        'geometry': "Geometry comes alive when we can see the shapes and relationships. Let's visualize this problem step by step.",
+        'algebra': "Algebra is the language of patterns. Let's decode this problem by seeing how expressions transform and relate.",
+        'calculus': "Calculus reveals the beauty of change and accumulation. Let's visualize these concepts to understand their meaning.",
+        'statistics': "Data tells stories. Let's visualize this statistical problem to understand what the numbers are really saying.",
+        'trigonometry': "Trigonometry connects angles and lengths. Let's see these relationships come to life through animation.",
+        'matrix': "Matrices organize information beautifully. Let's visualize how these arrays transform and interact.",
+        'sequence': "Sequences show patterns over time. Let's animate how these numbers evolve and relate.",
+        'general': "Mathematics is beautiful when we can see it. Let's explore this problem through visualization and understanding."
+      },
+      'zh': {
+        'equation': "让我们一起探索这个方程，通过清晰的视觉化和逻辑步骤来发现它的解法。",
+        'geometry': "当我们能够看到形状和关系时，几何就变得生动起来。让我们一步步可视化这个问题。",
+        'algebra': "代数是模式的语言。让我们通过观察表达式的变换和关系来解码这个问题。",
+        'calculus': "微积分揭示了变化和积累的奥秘。让我们通过可视化来理解这些概念的含义。",
+        'statistics': "数据讲述着故事。让我们可视化这个统计问题，理解数字真正想告诉我们什么。",
+        'trigonometry': "三角学连接了角度和长度。让我们看看这些关系如何通过动画变得生动。",
+        'matrix': "矩阵以优美的方式组织信息。让我们可视化这些数组如何变换和交互。",
+        'sequence': "数列显示了随时间变化的规律。让我们动画展示这些数字如何演变和关联。",
+        'general': "当我们能够看到数学时，它就变得美丽。让我们通过可视化和理解来探索这个问题。"
+      }
+    }
+    
+    const baseIntro = introductions[language]?.[problemType] || introductions[language]?.general || introductions['en'][problemType]
+    
+    const complexityHints = {
+      'simple': "We'll use straightforward visualizations to make this clear.",
+      'complex': "We'll break this down into manageable visual pieces to build deep understanding."
+    }
+    
+    return `${baseIntro} ${complexityHints[complexity.complexity] || ''}`
+  }
+
   buildMathSolvingPrompt(question, language, difficulty) {
-    const languageInstructions = {
-      'en': 'Solve this math problem step by step in English',
-      'zh': '请用中文逐步解决这个数学问题',
-      'es': 'Resuelve este problema matemático paso a paso en español',
-      'fr': 'Résolvez ce problème mathématique étape par étape en français',
-      'ja': 'この数学問題を日本語で段階的に解いてください'
+    const problemType = this.detectProblemType(question)
+    const complexity = this.detectProblemComplexity(question)
+    const introduction = this.buildAdaptiveIntroduction(question, language, problemType, complexity)
+    
+    const formatInstruction = complexity.useLaTeX 
+      ? 'Use LaTeX format for complex mathematical expressions when necessary, but keep simple operations in plain text for readability. Examples: Simple: 2x + 3 = 7, Complex: \\frac{x^2+1}{x-1} or \\sqrt{16} = 4'
+      : 'Use plain text mathematical notation only. Use +, -, *, /, =, ^ for exponents, sqrt() for square roots, and fractions as a/b. Examples: 2x + 3 = 7, x^2 + 4x + 3 = 0, sqrt(16) = 4, (x+1)/(x-1)'
+    
+    const narrativeStyle = {
+      'equation': 'Focus on the transformation and balance of both sides',
+      'geometry': 'Emphasize spatial relationships and visual constructions',
+      'algebra': 'Highlight pattern recognition and symbolic manipulation',
+      'calculus': 'Visualize change, accumulation, and limiting processes',
+      'statistics': 'Show data distributions and probabilistic relationships',
+      'trigonometry': 'Demonstrate angle relationships and periodic behavior',
+      'matrix': 'Illustrate transformations and system relationships',
+      'sequence': 'Display patterns and convergence behavior',
+      'general': 'Use intuitive visual approaches to build understanding'
     }
     
     return `
-${languageInstructions[language] || languageInstructions['en']}:
+Create an engaging mathematical visualization video for this ${problemType} problem in ${language}:
+
+${introduction}
 
 Question: ${question}
 Difficulty Level: ${difficulty}
+Problem Type: ${problemType}
+Problem Complexity: ${complexity.complexity}
 
-Please provide:
-1. Complete step-by-step solution
-2. Clear explanation for each step
-3. Final answer with verification
-4. Key mathematical concepts involved
-5. Common mistakes to avoid
-6. Visual elements that would help understanding
+${formatInstruction}
 
-Format your response as JSON with the following structure:
+Narrative Approach: ${narrativeStyle[problemType]}
+
+Instead of rigid "step-by-step" format, create a flowing narrative that:
+1. Starts with an intuitive understanding of the problem
+2. Uses visual storytelling to show mathematical concepts
+3. Adapts the explanation style to the problem type
+4. Includes moments of discovery and insight
+5. Connects to real-world applications when relevant
+6. Uses appropriate visual metaphors for the mathematical concepts
+
+Please provide a structured response that guides the animation creation:
 {
   "solution": "final answer",
-  "steps": [
+  "format": "${complexity.format}",
+  "problemType": "${problemType}",
+  "narrativeFlow": [
     {
-      "stepNumber": 1,
-      "description": "what we're doing",
-      "operation": "mathematical operation",
-      "result": "result of this step",
-      "explanation": "why we do this",
-      "visualHint": "how to show this visually"
+      "phase": "introduction",
+      "description": "how to introduce this concept visually",
+      "duration": 30,
+      "visualApproach": "specific visualization strategy"
+    },
+    {
+      "phase": "exploration",
+      "description": "how to explore the mathematical relationships",
+      "duration": 45,
+      "visualApproach": "interactive elements to show"
+    },
+    {
+      "phase": "solution",
+      "description": "how to reveal the solution naturally",
+      "duration": 30,
+      "visualApproach": "final visualization method"
     }
   ],
-  "explanation": "overall explanation",
+  "keyInsights": ["insight1", "insight2"],
+  "visualMetaphors": ["metaphor1", "metaphor2"],
   "topics": ["topic1", "topic2"],
   "assessedDifficulty": "actual difficulty level",
   "commonMistakes": ["mistake1", "mistake2"],
-  "visualElements": ["element1", "element2"]
+  "animationElements": ["element1", "element2"]
 }
 `
   }
@@ -392,20 +509,26 @@ Format as JSON:
 `
   }
 
-  async generateMathAnimations(mathSolution, teachingScript) {
+async generateMathAnimations(mathSolution, teachingScript) {
     // 调用Manim服务生成数学动画
     try {
+      const complexity = this.detectProblemComplexity(mathSolution.originalQuestion || '')
+      
       const animationRequest = {
         scenes: teachingScript.scenes.map(scene => ({
           sceneId: scene.sceneNumber,
           duration: scene.duration,
           mathContent: this.extractMathContent(scene),
           animationType: this.determineAnimationType(scene.animations),
-          style: 'educational'
+          format: complexity.format, // 传递格式信息
+          style: 'educational',
+          useLaTeX: complexity.useLaTeX // 明确指定是否使用LaTeX
         })),
         resolution: '1920x1080',
         fps: 30,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        format: complexity.format, // 全局格式设置
+        plainTextFallback: true // 允许纯文本回退
       }
       
       const response = await fetch(`${this.config.manim.endpoint}/generate-animation`, {
@@ -417,12 +540,65 @@ Format as JSON:
       })
       
       const result = await response.json()
+      
+      // 验证动画顺序和内容
+      if (result.animations && Array.isArray(result.animations)) {
+        const sortedAnimations = result.animations.sort((a, b) => a.sceneId - b.sceneId)
+        
+        // 去重检查
+        const uniqueAnimations = []
+        const seenContent = new Set()
+        
+        for (const animation of sortedAnimations) {
+          const contentKey = animation.mathContent?.trim()
+          if (contentKey && !seenContent.has(contentKey)) {
+            seenContent.add(contentKey)
+            uniqueAnimations.push(animation)
+          } else if (!contentKey) {
+            uniqueAnimations.push(animation)
+          }
+        }
+        
+        return uniqueAnimations
+      }
+      
       return result.animations
       
     } catch (error) {
       console.warn('Animation generation failed, using static visuals:', error)
       return this.generateStaticVisuals(mathSolution, teachingScript)
     }
+  }
+
+  extractMathContent(scene) {
+    // 从场景中安全提取数学内容，处理两种格式
+    if (!scene) return ''
+    
+    // 优先使用场景中的数学内容
+    const mathContent = scene.mathContent || scene.text || ''
+    
+    // 清理和标准化内容
+    return this.normalizeMathContent(mathContent)
+  }
+
+  normalizeMathContent(content) {
+    if (!content) return ''
+    
+    // 移除多余的空白字符
+    let normalized = content.replace(/\s+/g, ' ').trim()
+    
+    // 处理LaTeX格式中的特殊字符转换
+    if (normalized.includes('\\')) {
+      // 将常见LaTeX转换为manim兼容格式
+      normalized = normalized
+        .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1)/($2)')
+        .replace(/\\sqrt\{([^}]+)\}/g, 'sqrt($1)')
+        .replace(/\\cdot/g, '*')
+        .replace(/\\times/g, '*')
+        .replace(/\\div/g, '/')
+    }
+    
+    return normalized
   }
 
   async generateVoiceover(teachingScript, language, voiceGender) {
