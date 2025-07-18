@@ -254,43 +254,23 @@ class FixedQWENHandler(BaseHTTPRequestHandler):
                 user_question = msg.get('content', '')
                 break
         
-        # 检测是否为数学问题
-        math_keywords = ['方程', '求解', '计算', '=', '+', '-', '*', '/', 'x', 'y', '解', '答案', '不等式']
-        is_math = any(keyword in user_question for keyword in math_keywords)
+        # 检测问题类型
+        problem_type = self.detect_problem_type(user_question)
+        complexity = self.detect_problem_complexity(user_question)
         
-        if is_math and ('=' in user_question or '>' in user_question or '<' in user_question):
-            response_text = f"""我来帮你分析这个数学问题：
-
-**问题：** {user_question}
-
-**解题步骤：**
-1. 首先识别问题类型（方程、不等式、计算等）
-2. 整理已知条件和未知数
-3. 选择合适的解题方法
-4. 逐步求解
-5. 验证答案
-
-**示例解答：**
-假设这是一个不等式问题，比如 3x - 7 > 14：
-- 第一步：3x - 7 > 14
-- 第二步：3x > 14 + 7
-- 第三步：3x > 21
-- 第四步：x > 7
-
-**注意：** 当前使用备用响应模式，网络恢复后将提供完整AI解答。"""
+        # 根据问题类型生成相应的fallback响应
+        if problem_type == 'geometry' and ('三角形' in user_question or '面积' in user_question):
+            response_text = self.create_geometry_fallback(user_question)
+        elif problem_type == 'equation':
+            response_text = self.create_equation_fallback(user_question)
+        elif problem_type == 'calculus':
+            response_text = self.create_calculus_fallback(user_question)
+        elif problem_type == 'algebra':
+            response_text = self.create_algebra_fallback(user_question)
+        elif '视频' in user_question or '讲解' in user_question:
+            response_text = self.create_video_request_fallback(user_question, problem_type)
         else:
-            response_text = f"""感谢您的问题！
-
-**您的问题：** {user_question}
-
-由于当前网络连接问题，我无法提供完整的AI解答。
-
-**建议：**
-1. 请检查网络连接后重试
-2. 确保问题描述完整清楚
-3. 如果是数学问题，请包含具体的数字和符号
-
-**注意：** 当前使用备用响应模式，网络恢复后将提供完整AI解答。"""
+            response_text = self.create_general_fallback(user_question, problem_type)
 
         return {
             'output': {
@@ -302,8 +282,334 @@ class FixedQWENHandler(BaseHTTPRequestHandler):
             },
             'request_id': f'fallback_{int(time.time())}',
             'method': 'fallback',
-            'message': 'Enhanced fallback response due to network issues'
+            'message': f'Enhanced fallback response for {problem_type} problem'
         }
+
+    def detect_problem_type(self, question):
+        """检测问题类型"""
+        problem_types = {
+            'equation': r'方程|equation|solve|解|=',
+            'geometry': r'几何|geometry|三角形|面积|体积|图形|length|area|volume|angle',
+            'algebra': r'代数|algebra|多项式|polynomial|因式分解|factor',
+            'calculus': r'微积分|calculus|积分|integral|导数|derivative|极限|limit',
+            'statistics': r'统计|statistics|概率|probability|平均|mean|方差|variance',
+            'trigonometry': r'三角|trigonometry|sin|cos|tan|角度|angle',
+            'matrix': r'矩阵|matrix|行列式|determinant',
+            'sequence': r'数列|sequence|级数|series|等差|等比'
+        }
+        
+        import re
+        for problem_type, pattern in problem_types.items():
+            if re.search(pattern, question, re.IGNORECASE):
+                return problem_type
+        return 'general'
+
+    def detect_problem_complexity(self, question):
+        """检测问题复杂度"""
+        complex_patterns = [
+            r'integral|积分|∫',
+            r'derivative|导数|微分',
+            r'matrix|矩阵',
+            r'limit|极限',
+            r'sum|∑|sigma',
+            r'product|∏|pi',
+            r'sqrt|根号|√[^)]*\)|\^{[^{}]*}',
+            r'frac|\frac{[^{}]*}{[^{}]*}',
+            r'[∑∏∫∂∇∆∞∈∉⊂⊃⊆⊇∩∪]',
+            r'\$\$.*?\$\$',
+            r'\\\[.*?\\\]'
+        ]
+        
+        import re
+        complexity_score = sum(1 for pattern in complex_patterns if re.search(pattern, question, re.IGNORECASE))
+        
+        if complexity_score >= 3:
+            return {'complexity': 'complex', 'useLaTeX': True, 'format': 'detailed'}
+        elif complexity_score >= 1:
+            return {'complexity': 'intermediate', 'useLaTeX': True, 'format': 'structured'}
+        else:
+            return {'complexity': 'simple', 'useLaTeX': False, 'format': 'basic'}
+
+    def create_geometry_fallback(self, question):
+        """创建几何问题的fallback响应"""
+        if '三角形面积' in question and '拉窗帘' in question:
+            return f"""我来帮你创建三角形面积拉窗帘原理的讲解视频：
+
+**您的要求：** {question}
+
+**详细解题步骤**
+
+1. **理解三角形面积公式**
+   操作：回顾三角形面积的基本公式
+   公式：三角形面积 = (底边 × 高) ÷ 2
+   解释：这是计算三角形面积的标准公式，适用于所有类型的三角形
+   中间结果：面积 = (底边 × 高) ÷ 2
+
+2. **拉窗帘原理的几何意义**
+   操作：解释拉窗帘原理的几何含义
+   解释：拉窗帘原理说明，如果三角形的顶点沿着平行于底边的直线移动，面积保持不变
+   中间结果：面积守恒原理
+
+3. **动画演示过程**
+   操作：展示拉窗帘的动画过程
+   解释：通过动画展示顶点移动时面积保持不变的原理
+   中间结果：视觉化理解面积守恒
+
+4. **数学证明**
+   操作：给出数学证明
+   解释：使用坐标几何证明面积公式的普遍性
+   中间结果：面积 = |(x2-x1)(y3-y1) - (x3-x1)(y2-y1)|/2
+
+5. **实际应用**
+   操作：展示实际应用例子
+   解释：在不同类型的三角形中应用拉窗帘原理
+   中间结果：原理的普遍适用性
+
+**最终答案**
+三角形面积拉窗帘原理：当三角形的顶点沿着平行于底边的直线移动时，三角形的面积保持不变。
+
+**相关数学概念**
+- 三角形面积公式
+- 几何变换
+- 面积守恒原理
+- 坐标几何
+
+**常见错误提醒**
+- 混淆底边和高的概念
+- 忽略面积守恒的条件
+- 不理解几何变换的本质
+
+**注意：** 当前使用备用响应模式，网络恢复后将提供更详细的AI解答和动画脚本。"""
+        else:
+            return f"""我来帮你分析这个几何问题：
+
+**问题：** {question}
+
+**详细解题步骤**
+
+1. **理解几何概念**
+   操作：明确题目中的几何概念和条件
+   解释：仔细分析题目中的几何元素和关系
+   中间结果：确定已知条件和求解目标
+
+2. **绘制几何图形**
+   操作：根据题目条件绘制相应的几何图形
+   解释：图形化有助于理解几何关系
+   中间结果：清晰的几何图形
+
+3. **应用几何定理**
+   操作：选择合适的几何定理或公式
+   解释：根据题目类型应用相应的几何知识
+   中间结果：建立数学关系
+
+4. **逐步求解**
+   操作：按照几何逻辑逐步求解
+   解释：每一步都要有明确的几何依据
+   中间结果：得到中间结果
+
+5. **验证答案**
+   操作：检查计算过程和结果的合理性
+   解释：确保答案符合几何原理
+   中间结果：最终答案
+
+**注意：** 当前使用备用响应模式，网络恢复后将提供完整AI解答。"""
+
+    def create_equation_fallback(self, question):
+        """创建方程问题的fallback响应"""
+        return f"""我来帮你解决这个方程问题：
+
+**问题：** {question}
+
+**详细解题步骤**
+
+1. **理解方程类型**
+   操作：识别方程的类型（一元一次、一元二次等）
+   解释：不同类型的方程有不同的解法
+   中间结果：确定解题策略
+
+2. **整理方程形式**
+   操作：将方程整理为标准形式
+   解释：标准形式便于应用相应的解法
+   中间结果：ax + b = 0 或 ax² + bx + c = 0
+
+3. **应用解法**
+   操作：根据方程类型选择合适的解法
+   解释：一元一次方程用移项法，一元二次方程用公式法
+   中间结果：得到解的形式
+
+4. **计算具体数值**
+   操作：代入具体数值进行计算
+   解释：按照数学运算规则进行计算
+   中间结果：得到数值解
+
+5. **验证解的正确性**
+   操作：将解代入原方程验证
+   解释：确保解满足原方程
+   中间结果：验证通过
+
+**注意：** 当前使用备用响应模式，网络恢复后将提供完整AI解答。"""
+
+    def create_calculus_fallback(self, question):
+        """创建微积分问题的fallback响应"""
+        return f"""我来帮你解决这个微积分问题：
+
+**问题：** {question}
+
+**详细解题步骤**
+
+1. **识别微积分类型**
+   操作：确定是求导、积分还是极限问题
+   解释：不同类型的微积分问题有不同的解法
+   中间结果：确定解题方向
+
+2. **应用相应公式**
+   操作：根据问题类型应用相应的微积分公式
+   解释：求导用导数公式，积分用积分公式
+   中间结果：得到初步结果
+
+3. **简化表达式**
+   操作：对结果进行代数简化
+   解释：简化后的结果更易于理解和应用
+   中间结果：简化后的表达式
+
+4. **计算具体数值**
+   操作：如果有具体数值，进行代入计算
+   解释：得到最终的数值结果
+   中间结果：数值解
+
+5. **验证结果**
+   操作：检查计算过程和结果的合理性
+   解释：确保结果符合微积分原理
+   中间结果：验证通过
+
+**注意：** 当前使用备用响应模式，网络恢复后将提供完整AI解答。"""
+
+    def create_algebra_fallback(self, question):
+        """创建代数问题的fallback响应"""
+        return f"""我来帮你解决这个代数问题：
+
+**问题：** {question}
+
+**详细解题步骤**
+
+1. **理解代数表达式**
+   操作：分析代数表达式的结构和特点
+   解释：理解表达式中各项的含义和关系
+   中间结果：明确表达式结构
+
+2. **应用代数运算**
+   操作：根据代数运算规则进行计算
+   解释：遵循代数运算的优先级和规则
+   中间结果：得到运算结果
+
+3. **简化表达式**
+   操作：对结果进行代数简化
+   解释：合并同类项，化简分式等
+   中间结果：简化后的表达式
+
+4. **求解未知数**
+   操作：如果涉及未知数，进行求解
+   解释：使用代数方法求解方程或不等式
+   中间结果：得到解
+
+5. **验证结果**
+   操作：检查计算过程和结果的正确性
+   解释：确保结果符合代数原理
+   中间结果：验证通过
+
+**注意：** 当前使用备用响应模式，网络恢复后将提供完整AI解答。"""
+
+    def create_video_request_fallback(self, question, problem_type):
+        """创建视频请求的fallback响应"""
+        return f"""我来帮你创建这个教学视频：
+
+**您的要求：** {question}
+
+**教学视频制作步骤**
+
+1. **概念介绍**
+   - 解释相关数学概念的基本原理
+   - 说明在数学学习中的重要性
+   - 展示相关的数学公式和定理
+
+2. **原理演示**
+   - 通过动画展示数学原理
+   - 解释关键步骤和推理过程
+   - 展示不同情况下的应用
+
+3. **实际应用**
+   - 给出具体的计算例子
+   - 展示解题步骤和技巧
+   - 验证结果的正确性
+
+4. **总结归纳**
+   - 总结关键要点和公式
+   - 提供记忆技巧和方法
+   - 给出练习题建议
+
+**详细解题步骤**
+
+1. **理解问题要求**
+   操作：明确视频制作的目标和内容
+   解释：确定要讲解的数学概念和原理
+   中间结果：明确制作方向
+
+2. **设计教学内容**
+   操作：规划视频的结构和内容
+   解释：按照逻辑顺序组织教学内容
+   中间结果：教学内容框架
+
+3. **制作动画脚本**
+   操作：设计相应的数学动画
+   解释：通过动画直观展示数学原理
+   中间结果：动画脚本
+
+4. **生成语音讲解**
+   操作：制作配套的语音讲解
+   解释：用清晰的语言解释数学概念
+   中间结果：语音文件
+
+5. **合成最终视频**
+   操作：将动画和语音合成为完整视频
+   解释：确保视频的连贯性和教育效果
+   中间结果：教学视频
+
+**注意：** 当前使用备用响应模式，网络恢复后将提供更详细的AI解答和动画脚本。"""
+
+    def create_general_fallback(self, question, problem_type):
+        """创建通用问题的fallback响应"""
+        return f"""我来帮你分析这个数学问题：
+
+**问题：** {question}
+
+**详细解题步骤**
+
+1. **理解问题**
+   操作：仔细阅读题目，明确已知条件和要求
+   解释：分析题目中的关键词和数学概念
+   中间结果：明确解题目标
+
+2. **确定解题思路**
+   操作：根据问题类型选择合适的解题方法
+   解释：制定解题的整体策略和步骤
+   中间结果：解题计划
+
+3. **应用数学知识**
+   操作：使用相关的数学公式和定理
+   解释：根据问题特点应用相应的数学原理
+   中间结果：建立数学关系
+
+4. **逐步求解**
+   操作：按照数学逻辑逐步求解
+   解释：每一步都要有明确的数学依据
+   中间结果：得到中间结果
+
+5. **验证答案**
+   操作：检查计算过程和结果的正确性
+   解释：确保答案符合数学原理和题目要求
+   中间结果：最终答案
+
+**注意：** 当前使用备用响应模式，网络恢复后将提供完整AI解答。"""
 
     def log_message(self, format, *args):
         """自定义日志格式"""
