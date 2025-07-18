@@ -103,23 +103,42 @@ class FixedQWENHandler(BaseHTTPRequestHandler):
             
             # 尝试多种连接方式
             success = False
+            api_error = None
             
             # 方式1: 使用SDK
             if SDK_AVAILABLE and not success:
-                success = self.try_sdk_connection(api_key, request_data)
+                success, api_error, result = self.try_sdk_connection(api_key, request_data)
+                if success and result:
+                    self.safe_send_response(result)
+                    return
             
             # 方式2: 使用HTTP连接
             if not success:
-                success = self.try_http_connection(api_key, request_data)
+                success, api_error, result = self.try_http_connection(api_key, request_data)
+                if success and result:
+                    self.safe_send_response(result)
+                    return
             
-            # 方式3: 使用备用响应
+            # 方式3: 只有在真正的网络或服务问题时才使用备用响应
             if not success:
-                print("🔄 使用增强备用响应机制...")
-                fallback_response = self.create_enhanced_fallback_response(request_data.get('messages', []))
-                print(f"✅ 生成增强备用响应: {len(fallback_response['output']['text'])} 字符")
+                # 检查是否是API密钥问题（优先级最高）
+                if api_error and ('Invalid API-key' in str(api_error) or 'unauthorized' in str(api_error).lower() or '401' in str(api_error)):
+                    print("❌ API密钥无效，返回错误")
+                    self.safe_send_response({'error': 'Invalid API key', 'code': 'INVALID_API_KEY'}, 401)
+                    return
                 
-                if not self.safe_send_response(fallback_response):
-                    print("❌ 发送备用响应失败")
+                # 检查是否是网络连接问题
+                if api_error and ('timeout' in str(api_error).lower() or 'connection' in str(api_error).lower() or 'ssl' in str(api_error).lower() or 'tls' in str(api_error).lower()):
+                    print("🔄 网络连接问题，使用增强备用响应机制...")
+                    fallback_response = self.create_enhanced_fallback_response(request_data.get('messages', []))
+                    print(f"✅ 生成增强备用响应: {len(fallback_response['output']['text'])} 字符")
+                    
+                    if not self.safe_send_response(fallback_response):
+                        print("❌ 发送备用响应失败")
+                else:
+                    # 其他API错误
+                    print(f"❌ API调用失败: {api_error}")
+                    self.safe_send_response({'error': f'API call failed: {api_error}', 'code': 'API_ERROR'}, 500)
                 
         except json.JSONDecodeError as e:
             print(f"❌ JSON解析错误: {str(e)}")
@@ -166,14 +185,16 @@ class FixedQWENHandler(BaseHTTPRequestHandler):
                     'method': 'sdk'
                 }
                 
-                return self.safe_send_response(result)
+                return True, None, result
             else:
-                print(f"❌ SDK连接失败: {response.message}")
-                return False
+                error_msg = response.message
+                print(f"❌ SDK连接失败: {error_msg}")
+                return False, error_msg, None
                 
         except Exception as e:
-            print(f"❌ SDK连接异常: {type(e).__name__} - {str(e)}")
-            return False
+            error_msg = f"{type(e).__name__}: {str(e)}"
+            print(f"❌ SDK连接异常: {error_msg}")
+            return False, error_msg, None
 
     def try_http_connection(self, api_key, request_data):
         """尝试使用HTTP连接"""
@@ -205,6 +226,7 @@ class FixedQWENHandler(BaseHTTPRequestHandler):
                 'https://api.dashscope.com/v1/services/aigc/text-generation/generation'
             ]
             
+            last_error = None
             for endpoint in endpoints:
                 try:
                     print(f"  📡 尝试端点: {endpoint}")
@@ -233,17 +255,35 @@ class FixedQWENHandler(BaseHTTPRequestHandler):
                                 'method': 'http'
                             }
                             
-                            return self.safe_send_response(result)
+                            return True, None, result
+                        else:
+                            # 检查错误响应
+                            error_msg = response_json.get('message', 'Unknown HTTP error')
+                            last_error = error_msg
+                            print(f"  ❌ HTTP响应错误: {error_msg}")
                             
+                except urllib.error.HTTPError as e:
+                    error_msg = f"HTTP {e.code}: {e.reason}"
+                    last_error = error_msg
+                    print(f"  ❌ 端点 {endpoint} HTTP错误: {error_msg}")
+                    continue
+                except urllib.error.URLError as e:
+                    error_msg = f"URL Error: {e.reason}"
+                    last_error = error_msg
+                    print(f"  ❌ 端点 {endpoint} URL错误: {error_msg}")
+                    continue
                 except Exception as e:
-                    print(f"  ❌ 端点 {endpoint} 失败: {type(e).__name__}")
+                    error_msg = f"{type(e).__name__}: {str(e)}"
+                    last_error = error_msg
+                    print(f"  ❌ 端点 {endpoint} 失败: {error_msg}")
                     continue
             
-            return False
+            return False, last_error, None
             
         except Exception as e:
-            print(f"❌ HTTP连接异常: {type(e).__name__} - {str(e)}")
-            return False
+            error_msg = f"{type(e).__name__}: {str(e)}"
+            print(f"❌ HTTP连接异常: {error_msg}")
+            return False, error_msg, None
 
     def create_enhanced_fallback_response(self, messages):
         """创建增强的备用响应"""
