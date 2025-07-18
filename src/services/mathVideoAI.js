@@ -800,7 +800,7 @@ function extractAndSortSteps(aiContent) {
         .replace(/^步骤[:：]?\s*/i, '')
         .trim();
       
-      if (content.length > 15 && hasMathOperation(content) && !isTemplateStep(content)) {
+      if (content.length > 8 && !isTemplateStep(content)) {
         steps[stepNum - 1] = content;
         console.log(`📝 提取普通步骤 ${stepNum}: ${content.substring(0, 80)}...`);
       }
@@ -1428,7 +1428,7 @@ class ${sceneName}(Scene):
                 print(f"步骤 {i+1}: {step[:50]}...")
             
             # 限制最大步骤数，确保渲染稳定性
-            max_steps = min(len(steps), 6)
+            max_steps = min(len(steps), 4)
             steps = steps[:max_steps]
             
             previous_text = None
@@ -1452,10 +1452,10 @@ class ${sceneName}(Scene):
                     self.play(Write(step_content), run_time=1.2)
                     
                     # 智能等待时间，根据内容长度和复杂度调整
-                    base_wait = 6.0  # 减少基础等待时间
-                    content_factor = len(step_text) * 0.04  # 减少内容长度因子
-                    complexity_factor = step_text.count('=') * 0.3  # 减少数学公式复杂度因子
-                    wait_time = min(max(base_wait, content_factor + complexity_factor), 15.0) # 减少最大等待时间
+                    base_wait = 4.0  # 减少基础等待时间
+                    content_factor = len(step_text) * 0.02  # 减少内容长度因子
+                    complexity_factor = step_text.count('=') * 0.2  # 减少数学公式复杂度因子
+                    wait_time = min(max(base_wait, content_factor + complexity_factor), 10.0) # 减少最大等待时间
                     
                     print(f"步骤 {i+1} 等待时间: {wait_time:.1f}秒")
                     self.wait(wait_time)
