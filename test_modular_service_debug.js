@@ -1,4 +1,4 @@
-// 调试模块化服务
+// 测试模块化服务调用
 import { MathVideoAIService } from './src/services/mathVideoAI.js'
 
 async function testModularService() {
@@ -6,42 +6,60 @@ async function testModularService() {
   
   try {
     const mathVideoService = new MathVideoAIService()
-    console.log('✅ MathVideoAIService 实例创建成功')
+    console.log('✅ MathVideoAIService 实例化成功')
     
-    // 测试问题类型分析
-    console.log('\n🔍 测试问题类型分析...')
-    const question = '帮我生成一个三角形面积不变的拉窗帘原理讲解的视频。'
-    const analysis = mathVideoService.analyzeQuestionType(question)
-    console.log('问题类型分析结果:', analysis)
+    const question = '生成一个三角形面积不变的拉窗帘原理的动画讲解。'
+    const solution = '拉窗帘原理是三角形面积不变原理。当三角形的顶点沿着平行于底边的直线移动时，三角形的面积保持不变。'
+    const language = 'zh'
     
-    // 测试完整的视频生成流程
-    console.log('\n🎬 测试完整视频生成流程...')
-    const solution = '拉窗帘原理是几何学中的重要概念，它展示了三角形面积的不变性。当我们沿着三角形的中线剪开并重新组合时，面积保持不变。'
+    console.log('📝 测试参数:')
+    console.log('  问题:', question)
+    console.log('  解答:', solution)
+    console.log('  语言:', language)
     
-    console.log('📝 调用 generateMathVideo...')
-    const result = await mathVideoService.generateMathVideo(question, solution, 'zh')
-    console.log('✅ 视频生成结果:', result)
+    console.log('🔄 调用 generateMathVideo...')
+    const result = await mathVideoService.generateMathVideo(question, solution, language)
+    
+    console.log('🟢 完整结果:', JSON.stringify(result, null, 2))
     
     if (result && result.success) {
-      console.log('🎉 模块化服务工作正常！')
-      console.log('📊 结果详情:')
-      console.log('  - 问题类型:', result.type)
-      console.log('  - 脚本页数:', result.script?.pages?.length || 0)
-      console.log('  - 动画数量:', result.animations?.length || 0)
-      console.log('  - 语音时长:', result.voiceover?.duration || 0)
-      console.log('  - 总时长:', result.totalDuration || 0)
+      console.log('✅ 模块化服务调用成功')
+      if (result.animations && result.animations.length > 0) {
+        console.log('🎬 动画数量:', result.animations.length)
+        result.animations.forEach((anim, index) => {
+          console.log(`  动画 ${index + 1}:`, {
+            videoPath: anim.videoPath,
+            audioPath: anim.audioPath,
+            duration: anim.duration,
+            animationType: anim.animationType
+          })
+        })
+      } else {
+        console.log('⚠️ 没有生成动画')
+      }
+      
+      if (result.voiceover) {
+        console.log('🎤 语音信息:', {
+          audioPath: result.voiceover.audioPath,
+          duration: result.voiceover.duration,
+          type: result.voiceover.type
+        })
+      } else {
+        console.log('⚠️ 没有生成语音')
+      }
     } else {
-      console.log('❌ 模块化服务返回失败结果:', result)
+      console.log('❌ 模块化服务调用失败')
     }
     
   } catch (error) {
-    console.error('❌ 模块化服务测试失败:', error)
-    console.error('错误堆栈:', error.stack)
+    console.error('❌ 测试失败:', error)
+    console.error('🔍 错误详情:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    })
   }
 }
 
 // 运行测试
-testModularService().catch(error => {
-  console.error('❌ 测试执行失败:', error)
-  process.exit(1)
-}) 
+testModularService() 
