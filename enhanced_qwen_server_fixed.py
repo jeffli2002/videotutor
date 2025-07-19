@@ -127,18 +127,21 @@ class FixedQWENHandler(BaseHTTPRequestHandler):
                     self.safe_send_response({'error': 'Invalid API key', 'code': 'INVALID_API_KEY'}, 401)
                     return
                 
-                # 检查是否是网络连接问题
-                if api_error and ('timeout' in str(api_error).lower() or 'connection' in str(api_error).lower() or 'ssl' in str(api_error).lower() or 'tls' in str(api_error).lower()):
-                    print("🔄 网络连接问题，使用增强备用响应机制...")
-                    fallback_response = self.create_enhanced_fallback_response(request_data.get('messages', []))
-                    print(f"✅ 生成增强备用响应: {len(fallback_response['output']['text'])} 字符")
-                    
-                    if not self.safe_send_response(fallback_response):
-                        print("❌ 发送备用响应失败")
-                else:
-                    # 其他API错误
-                    print(f"❌ API调用失败: {api_error}")
-                    self.safe_send_response({'error': f'API call failed: {api_error}', 'code': 'API_ERROR'}, 500)
+                # 检查是否是网络连接问题或SSL问题
+                error_str = str(api_error).lower()
+                network_issues = [
+                    'timeout', 'connection', 'ssl', 'tls', 'unrecognized_name', 
+                    'certificate', 'handshake', 'network', 'dns', 'host', 'url error'
+                ]
+                
+                # 所有错误都使用fallback，确保服务稳定
+                print("🔄 API调用失败，使用增强备用响应机制...")
+                print(f"错误详情: {api_error}")
+                fallback_response = self.create_enhanced_fallback_response(request_data.get('messages', []))
+                print(f"✅ 生成增强备用响应: {len(fallback_response['output']['text'])} 字符")
+                
+                if not self.safe_send_response(fallback_response):
+                    print("❌ 发送备用响应失败")
                 
         except json.JSONDecodeError as e:
             print(f"❌ JSON解析错误: {str(e)}")

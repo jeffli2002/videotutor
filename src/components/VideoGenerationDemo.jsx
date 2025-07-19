@@ -5,10 +5,13 @@ import { Textarea } from './ui/textarea'
 import { Badge } from './ui/badge'
 import { Progress } from './ui/progress'
 import { CheckCircle, X, Upload, Mic, Play, Award, RefreshCw, Pause, RotateCcw, Download, Share2, FileText, Trash2, Save } from 'lucide-react'
-import { generateManimVideoFromQwen } from '../services/mathVideoAI'
+import { MathVideoAIService } from '../services/mathVideoAI'
 import userService from '../services/userService'
 
 export default function VideoGenerationDemo({ user, onLoginRequired }) {
+  // 创建数学视频AI服务实例
+  const mathVideoService = new MathVideoAIService()
+  
   const [question, setQuestion] = useState('')
   const [language, setLanguage] = useState('zh')
   const [isGenerating, setIsGenerating] = useState(false)
@@ -570,7 +573,9 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
           console.log(`  ${index + 1}. ${step}`)
         })
         
-        manimVideoUrl = await generateManimVideoFromQwen(steps, `qwen_video_${Date.now()}`)
+        // 使用新的模块化服务生成视频
+        const videoResult = await mathVideoService.generateMathVideo(question, steps.join('\n\n'), language)
+        manimVideoUrl = videoResult.animations?.[0]?.url || ''
         console.log('✅ Manim视频生成结果:', manimVideoUrl)
       } catch (e) {
         console.error('❌ Manim渲染失败:', e)
@@ -581,11 +586,21 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
       setGenerationProgress(100)
       await delay(500)
 
+      // 处理视频URL
+      let processedVideoUrl = manimVideoUrl
+      if (manimVideoUrl && !manimVideoUrl.startsWith('/rendered_videos/') && !manimVideoUrl.startsWith('http')) {
+        // 如果URL不完整，添加路径前缀
+        if (manimVideoUrl.includes('qwen_video_') || manimVideoUrl.includes('geometry_video_')) {
+          processedVideoUrl = `/rendered_videos/${manimVideoUrl}`
+          console.log('🔧 修复视频URL:', processedVideoUrl)
+        }
+      }
+      
       // 生成最终结果
       const finalResult = {
         success: true,
         video: {
-          videoUrl: manimVideoUrl || '/videos/sample-math-explanation.mp4',
+          videoUrl: processedVideoUrl || '/videos/sample-math-explanation.mp4',
           thumbnailUrl: '/images/video-thumbnail.jpg',
           duration: 180,
           processingTime: 45
@@ -1334,9 +1349,28 @@ Please ensure each step is detailed and complete, suitable for K12 students to u
     setVideoCurrentTime(0)
     setIsPlaying(false)
     
-    // 如果有真实的Manim视频，直接跳转到视频区域
-    if (result.video?.videoUrl && result.video.videoUrl.startsWith('/rendered_videos/')) {
-      console.log('🎬 准备播放真实视频:', result.video.videoUrl)
+    // 检查视频URL并尝试修复
+    if (result.video?.videoUrl) {
+      console.log('🎬 准备播放视频:', result.video.videoUrl)
+      
+      // 确保视频URL格式正确
+      let videoUrl = result.video.videoUrl
+      if (!videoUrl.startsWith('/rendered_videos/') && !videoUrl.startsWith('http')) {
+        // 如果URL不完整，尝试修复
+        if (videoUrl.includes('qwen_video_')) {
+          videoUrl = `/rendered_videos/${videoUrl}`
+          console.log('🔧 修复视频URL:', videoUrl)
+          // 更新result中的videoUrl
+          setResult(prev => ({
+            ...prev,
+            video: {
+              ...prev.video,
+              videoUrl: videoUrl
+            }
+          }))
+        }
+      }
+      
       // 等待DOM更新后自动聚焦到视频元素
       setTimeout(() => {
         const videoElement = document.querySelector('video')
@@ -2051,9 +2085,16 @@ Please ensure each step is detailed and complete, suitable for K12 students to u
                             onError={(e) => {
                               console.error('视频加载失败:', e);
                               console.log('尝试的视频URL:', `${VIDEO_SERVER}${result.video.videoUrl}`);
+                              // 尝试备用服务器
+                              const backupUrl = `http://localhost:8002${result.video.videoUrl}`;
+                              console.log('尝试备用URL:', backupUrl);
+                              e.target.src = backupUrl;
                             }}
                             onLoadedData={() => {
                               console.log('✅ 视频加载成功:', result.video.videoUrl);
+                            }}
+                            onLoadStart={() => {
+                              console.log('🔄 开始加载视频:', `${VIDEO_SERVER}${result.video.videoUrl}`);
                             }}
                           >
                             {language === 'zh' ? '您的浏览器不支持视频播放。' : 'Your browser does not support the video tag.'}
