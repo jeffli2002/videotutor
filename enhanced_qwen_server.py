@@ -243,7 +243,17 @@ class EnhancedQWENHandler(BaseHTTPRequestHandler):
         math_keywords = ['方程', '求解', '计算', '=', '+', '-', '*', '/', 'x', 'y', '解', '答案', '求']
         is_math = any(keyword in question_lower for keyword in math_keywords)
         
+        # 调试信息
+        print(f"🔍 问题类型检测:")
+        print(f"   问题: {user_question}")
+        print(f"   小写: {question_lower}")
+        print(f"   理论关键词匹配: {[k for k in theory_keywords if k in question_lower]}")
+        print(f"   数学关键词匹配: {[k for k in math_keywords if k in question_lower]}")
+        print(f"   是否为理论问题: {is_theory}")
+        print(f"   是否为数学问题: {is_math}")
+        
         if is_theory:
+            print("✅ 识别为理论问题，生成概念分析响应")
             # 理论问题响应
             response_text = f"""我来帮你解释这个数学概念：
 
@@ -268,6 +278,7 @@ class EnhancedQWENHandler(BaseHTTPRequestHandler):
 **注意：** 当前使用备用响应模式，网络恢复后将提供完整AI解答。"""
         
         elif is_math and '=' in question_lower:
+            print("✅ 识别为数学问题，生成解题提示响应")
             # 方程求解问题响应
             response_text = f"""我来帮你分析这个数学问题：
 
@@ -288,6 +299,7 @@ class EnhancedQWENHandler(BaseHTTPRequestHandler):
 **注意：** 当前使用备用响应模式，网络恢复后将提供完整AI解答。"""
         
         else:
+            print("✅ 识别为通用问题，生成通用响应")
             # 通用问题响应
             response_text = f"""感谢您的问题！
 
