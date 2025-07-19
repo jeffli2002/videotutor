@@ -232,11 +232,43 @@ class EnhancedQWENHandler(BaseHTTPRequestHandler):
                 user_question = msg.get('content', '')
                 break
         
-        # 检测是否为数学问题
-        math_keywords = ['方程', '求解', '计算', '=', '+', '-', '*', '/', 'x', 'y', '解', '答案']
-        is_math = any(keyword in user_question for keyword in math_keywords)
+        # 检测问题类型
+        question_lower = user_question.lower()
         
-        if is_math and '=' in user_question:
+        # 检测是否为理论问题（如勾股定理、拉窗帘原理等）
+        theory_keywords = ['勾股定理', '拉窗帘', '原理', '定理', '概念', '解释', '动画', '视频', '演示']
+        is_theory = any(keyword in question_lower for keyword in theory_keywords)
+        
+        # 检测是否为具体数学问题
+        math_keywords = ['方程', '求解', '计算', '=', '+', '-', '*', '/', 'x', 'y', '解', '答案', '求']
+        is_math = any(keyword in question_lower for keyword in math_keywords)
+        
+        if is_theory:
+            # 理论问题响应
+            response_text = f"""我来帮你解释这个数学概念：
+
+**问题：** {user_question}
+
+**概念分析：**
+这是一个数学理论概念的解释问题，需要从以下几个方面来理解：
+
+1. **基本定义** - 理解概念的核心含义
+2. **几何意义** - 从图形角度理解
+3. **应用场景** - 实际应用和例子
+4. **证明过程** - 数学证明和推导
+
+**详细解释：**
+由于当前网络连接问题，我无法提供完整的AI解答。
+
+**建议：**
+- 请检查网络连接后重试
+- 确保问题描述完整清楚
+- 如需详细解答，请稍后重试
+
+**注意：** 当前使用备用响应模式，网络恢复后将提供完整AI解答。"""
+        
+        elif is_math and '=' in question_lower:
+            # 方程求解问题响应
             response_text = f"""我来帮你分析这个数学问题：
 
 **问题：** {user_question}
@@ -254,7 +286,9 @@ class EnhancedQWENHandler(BaseHTTPRequestHandler):
 - 如需详细解答，请稍后重试
 
 **注意：** 当前使用备用响应模式，网络恢复后将提供完整AI解答。"""
+        
         else:
+            # 通用问题响应
             response_text = f"""感谢您的问题！
 
 **您的问题：** {user_question}
