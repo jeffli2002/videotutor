@@ -7,6 +7,12 @@ export class AnimationGenerator {
     this.config = {
       manim: {
         endpoint: 'http://localhost:5001/api/manim_render'
+      },
+      tts: {
+        endpoint: 'http://localhost:8003/api/tts'
+      },
+      merger: {
+        endpoint: 'http://localhost:5001/api/merge_audio_video'
       }
     }
   }
@@ -78,8 +84,18 @@ export class AnimationGenerator {
     const concepts = this.extractTheoreticalConcepts(solution, question)
     
     try {
-      // 生成Manim脚本
-      const manimScript = this.buildTheoreticalQuestionManimScript(concepts, question)
+      // 识别问题主题
+      const topic = this.questionAnalyzer.identifyTopic(question)
+      console.log('📚 识别问题主题:', topic)
+      
+      // 通过AI生成Manim脚本
+      console.log('🤖 通过AI生成Manim脚本...')
+      const manimScript = await this.questionAnalyzer.generateManimScript(question, solution, topic, 'theoretical_question')
+      
+      // 从脚本中提取场景名称
+      const sceneNameMatch = manimScript.match(/class\s+(\w+)Scene\s*\(/);
+      const sceneName = sceneNameMatch ? sceneNameMatch[1] + 'Scene' : 'TheoreticalQuestionScene'
+      console.log('🎭 场景名称:', sceneName)
       
       // 调用Manim服务器生成视频
       const response = await fetch(this.config.manim.endpoint, {
@@ -90,7 +106,7 @@ export class AnimationGenerator {
         body: JSON.stringify({
           script: manimScript,
           output_name: `theoretical_question_${Date.now()}`,
-          scene_name: question.includes('拉窗帘') ? 'CurtainPrincipleScene' : 'TheoreticalQuestionScene'
+          scene_name: sceneName
         })
       })
       
@@ -98,14 +114,28 @@ export class AnimationGenerator {
       
       if (result.success && result.video_path) {
         console.log('✅ 理论问题动画生成成功:', result.video_path)
+        
+        // 生成TTS音频
+        const ttsText = this.generateTTSContent(question, concepts, language)
+        const audioPath = await this.generateTTSAudio(ttsText, language)
+        
+        // 合并音频和视频
+        let finalVideoPath = result.video_path
+        if (audioPath) {
+          finalVideoPath = await this.mergeAudioVideo(result.video_path, audioPath)
+        }
+        
         return [{
           sceneId: 1,
           animationType: 'theoretical_question',
-          videoPath: result.video_path,
+          videoPath: finalVideoPath,
+          audioPath: audioPath,
           duration: Math.max(25, concepts.length * 10),
           mathContent: concepts.join('; '),
           concepts: concepts,
-          script: script
+          script: script,
+          topic: topic,
+          aiGenerated: true
         }]
       } else {
         console.warn('❌ 理论问题动画生成失败:', result.error)
@@ -154,7 +184,7 @@ class ConcreteProblemScene(Scene):
         
         # 显示题目
         question_text = Text("${question.substring(0, 50)}${question.length > 50 ? '...' : ''}", 
-                           font_size=20, color=BLACK).next_to(title, DOWN, buff=0.5)
+                           font_size=20, color=BLACK).next_to(title, DOWN, buff=0.8)
         self.play(Write(question_text), run_time=1.0)
         self.wait(1.0)
         
@@ -165,8 +195,8 @@ class ConcreteProblemScene(Scene):
         
         previous_text = None
         for i, step_text in enumerate(steps):
-            step_num = Text(f"步骤 {i+1}", font_size=24, color=BLUE, weight=BOLD)
-            step_num.next_to(question_text, DOWN, buff=1.0)
+            step_num = Text(f"步骤 {i+1}", font_size=24, color=BLUE)
+            step_num.next_to(question_text, DOWN, buff=1.2)
             
             step_content = self.create_step_content(step_text, step_num)
             
@@ -185,8 +215,8 @@ class ConcreteProblemScene(Scene):
         if previous_text:
             self.play(FadeOut(previous_text), run_time=0.8)
         
-        summary = Text("解题完成", font_size=28, color=GREEN, weight=BOLD)
-        summary.next_to(question_text, DOWN, buff=1.0)
+        summary = Text("解题完成", font_size=28, color=GREEN)
+        summary.next_to(question_text, DOWN, buff=1.2)
         self.play(Write(summary), run_time=1.0)
         self.wait(2.0)
     
@@ -226,6 +256,11 @@ class ConcreteProblemScene(Scene):
   buildTheoreticalQuestionManimScript(concepts, question) {
     const conceptsStr = JSON.stringify(concepts)
     
+    // 检查是否为勾股定理
+    if (question.includes('勾股定理') || question.includes('毕达哥拉斯')) {
+      return this.buildPythagoreanTheoremManimScript(question)
+    }
+    
     // 检查是否为拉窗帘原理等特殊理论问题
     if (question.includes('拉窗帘') || question.includes('面积不变')) {
       return this.buildCurtainPrincipleManimScript(question)
@@ -251,7 +286,7 @@ class TheoreticalQuestionScene(Scene):
         
         # 显示问题
         question_text = Text("${question.substring(0, 50)}${question.length > 50 ? '...' : ''}", 
-                           font_size=20, color=BLACK).next_to(title, DOWN, buff=0.5)
+                           font_size=20, color=BLACK).next_to(title, DOWN, buff=0.8)
         self.play(Write(question_text), run_time=1.0)
         self.wait(1.0)
         
@@ -262,8 +297,8 @@ class TheoreticalQuestionScene(Scene):
         
         previous_text = None
         for i, concept_text in enumerate(concepts):
-            concept_num = Text(f"概念 {i+1}", font_size=24, color=BLUE, weight=BOLD)
-            concept_num.next_to(question_text, DOWN, buff=1.0)
+            concept_num = Text(f"概念 {i+1}", font_size=24, color=BLUE)
+            concept_num.next_to(question_text, DOWN, buff=1.2)
             
             concept_content = self.create_concept_content(concept_text, concept_num)
             
@@ -282,8 +317,8 @@ class TheoreticalQuestionScene(Scene):
         if previous_text:
             self.play(FadeOut(previous_text), run_time=0.8)
         
-        summary = Text("概念理解完成", font_size=28, color=GREEN, weight=BOLD)
-        summary.next_to(question_text, DOWN, buff=1.0)
+        summary = Text("概念理解完成", font_size=28, color=GREEN)
+        summary.next_to(question_text, DOWN, buff=1.2)
         self.play(Write(summary), run_time=1.0)
         self.wait(2.0)
     
@@ -308,14 +343,104 @@ class TheoreticalQuestionScene(Scene):
             for i, line in enumerate(lines):
                 text_obj = Text(line, font_size=18, color=BLACK)
                 if i == 0:
-                    text_obj.next_to(concept_num, DOWN, buff=0.3)
+                    text_obj.next_to(concept_num, DOWN, buff=0.5)
                 else:
-                    text_obj.next_to(text_objects[i-1], DOWN, buff=0.1)
+                    text_obj.next_to(text_objects[i-1], DOWN, buff=0.2)
                 text_objects.append(text_obj)
             
             return VGroup(*text_objects)
         else:
-            return Text(text, font_size=18, color=BLACK).next_to(concept_num, DOWN, buff=0.3)
+            return Text(text, font_size=18, color=BLACK).next_to(concept_num, DOWN, buff=0.5)
+`
+  }
+
+  // 构建勾股定理的专门Manim脚本
+  buildPythagoreanTheoremManimScript(question) {
+    return `from manim import *
+import warnings
+warnings.filterwarnings("ignore")
+
+config.frame_rate = 30
+config.pixel_height = 1080
+config.pixel_width = 1920
+config.background_color = WHITE
+
+class PythagoreanTheoremScene(Scene):
+    def construct(self):
+        self.camera.background_color = WHITE
+        
+        # 标题
+        title = Text("勾股定理演示", font_size=36, color=BLUE).to_edge(UP)
+        self.play(Write(title), run_time=1.0)
+        self.wait(0.5)
+        
+        # 创建直角三角形 - 位置调整到左侧，为右侧文字留出空间
+        triangle = Polygon(
+            ORIGIN, 
+            RIGHT * 3, 
+            UP * 2, 
+            color=BLUE, 
+            fill_opacity=0.3
+        )
+        triangle.move_to(LEFT * 2)  # 向左移动，为右侧文字留出空间
+        
+        # 显示三角形
+        self.play(Create(triangle), run_time=1.5)
+        
+        # 添加标签 - 位置优化，避免重叠
+        A_label = Text("A", font_size=20, color=BLACK).next_to(triangle.get_vertices()[0], DOWN+LEFT, buff=0.3)
+        B_label = Text("B", font_size=20, color=BLACK).next_to(triangle.get_vertices()[1], DOWN+RIGHT, buff=0.3)
+        C_label = Text("C", font_size=20, color=BLACK).next_to(triangle.get_vertices()[2], UP, buff=0.3)
+        
+        self.play(Write(A_label), Write(B_label), Write(C_label), run_time=1.0)
+        self.wait(1.0)
+        
+        # 显示勾股定理公式 - 放在右侧空白处
+        formula = MathTex(r"a^2 + b^2 = c^2", font_size=32, color=BLACK)
+        formula.move_to(RIGHT * 3 + UP * 1.5)  # 放在右侧上方
+        self.play(Write(formula), run_time=1.2)
+        self.wait(1.5)
+        
+        # 显示边长标注 - 放在右侧中间
+        a_label = MathTex(r"a = 3", font_size=24, color=GREEN)
+        a_label.move_to(RIGHT * 3 + UP * 0.5)
+        
+        b_label = MathTex(r"b = 4", font_size=24, color=GREEN)
+        b_label.move_to(RIGHT * 3 + DOWN * 0.5)
+        
+        c_label = MathTex(r"c = 5", font_size=24, color=GREEN)
+        c_label.move_to(RIGHT * 3 + DOWN * 1.5)
+        
+        self.play(Write(a_label), Write(b_label), Write(c_label), run_time=1.5)
+        self.wait(2.0)
+        
+        # 显示计算过程 - 放在右侧下方
+        calc1 = MathTex(r"a^2 = 3^2 = 9", font_size=20, color=BLACK)
+        calc1.move_to(RIGHT * 3 + DOWN * 2.5)
+        
+        calc2 = MathTex(r"b^2 = 4^2 = 16", font_size=20, color=BLACK)
+        calc2.move_to(RIGHT * 3 + DOWN * 3.0)
+        
+        calc3 = MathTex(r"c^2 = a^2 + b^2 = 9 + 16 = 25", font_size=20, color=BLACK)
+        calc3.move_to(RIGHT * 3 + DOWN * 3.5)
+        
+        calc4 = MathTex(r"c = \\sqrt{25} = 5", font_size=20, color=BLACK)
+        calc4.move_to(RIGHT * 3 + DOWN * 4.0)
+        
+        self.play(Write(calc1), run_time=0.8)
+        self.wait(0.5)
+        self.play(Write(calc2), run_time=0.8)
+        self.wait(0.5)
+        self.play(Write(calc3), run_time=1.0)
+        self.wait(0.5)
+        self.play(Write(calc4), run_time=0.8)
+        self.wait(2.0)
+        
+        # 总结
+        summary = Text("勾股定理验证完成", font_size=28, color=GREEN)
+        summary.move_to(DOWN * 2.5)
+        self.play(Write(summary), run_time=1.0)
+        self.wait(3.0)
 `
   }
 
@@ -335,7 +460,7 @@ class CurtainPrincipleScene(Scene):
         self.camera.background_color = WHITE
         
         # 标题
-        title = Text("拉窗帘原理演示", font_size=36, color=BLUE, weight=BOLD).to_edge(UP)
+        title = Text("拉窗帘原理演示", font_size=36, color=BLUE).to_edge(UP)
         self.play(Write(title), run_time=1.0)
         self.wait(0.5)
         
@@ -357,17 +482,17 @@ class CurtainPrincipleScene(Scene):
         # 显示三角形
         self.play(Create(triangle), run_time=1.5)
         
-        # 添加标签
-        A_label = Text("A", font_size=20, color=BLACK).next_to(triangle.get_vertices()[0], DOWN+LEFT, buff=0.2)
-        B_label = Text("B", font_size=20, color=BLACK).next_to(triangle.get_vertices()[1], DOWN+RIGHT, buff=0.2)
-        C_label = Text("C", font_size=20, color=BLACK).next_to(triangle.get_vertices()[2], UP, buff=0.2)
+        # 添加标签 - 修复位置避免重叠
+        A_label = Text("A", font_size=20, color=BLACK).next_to(triangle.get_vertices()[0], DOWN+LEFT, buff=0.3)
+        B_label = Text("B", font_size=20, color=BLACK).next_to(triangle.get_vertices()[1], DOWN+RIGHT, buff=0.3)
+        C_label = Text("C", font_size=20, color=BLACK).next_to(triangle.get_vertices()[2], UP, buff=0.3)
         
         self.play(Write(A_label), Write(B_label), Write(C_label), run_time=1.0)
         self.wait(1.0)
         
         # 显示面积公式
-        area_formula = MathTex(r"S = \frac{1}{2} \times \text{底} \times \text{高}", font_size=28, color=BLACK)
-        area_formula.next_to(triangle, DOWN, buff=1.0)
+        area_formula = MathTex(r"S = \\frac{1}{2} \\times \\text{底} \\times \\text{高}", font_size=28, color=BLACK)
+        area_formula.next_to(triangle, DOWN, buff=1.5)
         self.play(Write(area_formula), run_time=1.2)
         self.wait(2.0)
         
@@ -379,7 +504,7 @@ class CurtainPrincipleScene(Scene):
         midline = Line(mid_point, triangle.get_vertices()[2], color=RED, stroke_width=3)
         
         # 显示中线
-        midline_label = Text("中线", font_size=18, color=RED).next_to(midline.get_center(), RIGHT, buff=0.3)
+        midline_label = Text("中线", font_size=18, color=RED).next_to(midline.get_center(), RIGHT, buff=0.5)
         self.play(Create(midline), Write(midline_label), run_time=1.5)
         self.wait(1.0)
         
@@ -411,10 +536,10 @@ class CurtainPrincipleScene(Scene):
         self.play(Create(triangle1), Create(triangle2), run_time=1.5)
         self.wait(1.5)
         
-        # 重新组合
+        # 重新组合 - 增加间距避免重叠
         self.play(
-            triangle1.animate.move_to(ORIGIN + LEFT * 2),
-            triangle2.animate.move_to(ORIGIN + RIGHT * 2),
+            triangle1.animate.move_to(ORIGIN + LEFT * 3),
+            triangle2.animate.move_to(ORIGIN + RIGHT * 3),
             run_time=2.0
         )
         
@@ -448,15 +573,15 @@ class CurtainPrincipleScene(Scene):
         )
         
         # 结论
-        conclusion = Text("面积保持不变！", font_size=32, color=GREEN, weight=BOLD)
-        conclusion.next_to(final_triangle, DOWN, buff=1.0)
+        conclusion = Text("面积保持不变！", font_size=32, color=GREEN)
+        conclusion.next_to(final_triangle, DOWN, buff=1.5)
         self.play(Write(conclusion), run_time=1.2)
         self.wait(3.0)
         
         # 最终总结
         final_text = Text("拉窗帘原理：三角形沿中线分割后重新组合，面积不变", 
                          font_size=20, color=BLACK)
-        final_text.next_to(conclusion, DOWN, buff=0.8)
+        final_text.next_to(conclusion, DOWN, buff=1.0)
         self.play(Write(final_text), run_time=1.5)
         self.wait(2.0)
 `
@@ -536,5 +661,83 @@ class CurtainPrincipleScene(Scene):
       mathContent: question,
       script: script
     }]
+  }
+
+  // 生成TTS内容
+  generateTTSContent(question, concepts, language) {
+    if (question.includes('勾股定理')) {
+      return '勾股定理是直角三角形的基本性质：a的平方加b的平方等于c的平方。这个定理描述了直角三角形中，两条直角边的平方和等于斜边的平方。'
+    } else if (question.includes('拉窗帘')) {
+      return '拉窗帘原理是三角形面积不变原理。当三角形的顶点沿着平行于底边的直线移动时，三角形的面积保持不变。'
+    } else {
+      return concepts.join('。') + '。概念理解完成。'
+    }
+  }
+
+  // 生成TTS音频
+  async generateTTSAudio(text, language = 'zh') {
+    try {
+      console.log('🎤 生成TTS音频...')
+      
+      const response = await fetch(this.config.tts.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: text,
+          language: language,
+          method: 'auto'
+        })
+      })
+      
+      const result = await response.json()
+      
+      if (result.success && result.audio_path) {
+        console.log('✅ TTS音频生成成功:', result.audio_path)
+        // 修复音频路径，移除开头的斜杠
+        const fixedAudioPath = result.audio_path.startsWith('/') ? result.audio_path.substring(1) : result.audio_path
+        return fixedAudioPath
+      } else {
+        console.warn('❌ TTS音频生成失败:', result.error)
+        return null
+      }
+      
+    } catch (error) {
+      console.error('❌ TTS音频生成异常:', error)
+      return null
+    }
+  }
+
+  // 合并音频和视频
+  async mergeAudioVideo(videoPath, audioPath) {
+    try {
+      console.log('🎬 合并音频和视频...')
+      
+      const response = await fetch(this.config.merger.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          video_path: videoPath,
+          audio_path: audioPath
+        })
+      })
+      
+      const result = await response.json()
+      
+      if (result.success && result.final_video_path) {
+        console.log('✅ 音频视频合并成功:', result.final_video_path)
+        return result.final_video_path
+      } else {
+        console.warn('❌ 音频视频合并失败:', result.error)
+        return videoPath // 返回原视频路径
+      }
+      
+    } catch (error) {
+      console.error('❌ 音频视频合并异常:', error)
+      return videoPath // 返回原视频路径
+    }
   }
 } 

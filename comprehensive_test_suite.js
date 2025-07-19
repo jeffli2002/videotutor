@@ -1,480 +1,304 @@
-#!/usr/bin/env node
+// 全面测试套件 - 覆盖所有类型的问题，验证AI生成的脚本、TTS和视频生成播放功能
+import { MathVideoAIService } from './src/services/mathVideoAI.js'
 
-/**
- * 综合测试套件 - 验证所有修复
- * 测试AI响应提取、去重、数学内容保留等
- */
-
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// 模拟完整的AI服务函数
-class ComprehensiveTester {
-  constructor() {
-    this.testResults = {
-      extraction: [],
-      deduplication: [],
-      formatHandling: [],
-      edgeCases: [],
-      production: []
-    };
+// 测试用例集合
+const testCases = [
+  // 1. 理论问题 - 几何概念
+  {
+    category: '理论问题 - 几何概念',
+    question: '请解释勾股定理',
+    solution: '勾股定理是直角三角形中，直角边的平方和等于斜边的平方。即 a² + b² = c²。',
+    description: '基础几何定理解释'
+  },
+  
+  // 2. 理论问题 - 代数概念
+  {
+    category: '理论问题 - 代数概念',
+    question: '什么是二次函数？',
+    solution: '二次函数是形如 f(x) = ax² + bx + c 的函数，其中 a ≠ 0。它的图像是一条抛物线。',
+    description: '代数函数概念'
+  },
+  
+  // 3. 计算问题 - 方程求解
+  {
+    category: '计算问题 - 方程求解',
+    question: '求解方程 2x + 5 = 15',
+    solution: '步骤1：2x + 5 = 15\n步骤2：2x = 15 - 5\n步骤3：2x = 10\n步骤4：x = 5',
+    description: '一元一次方程求解'
+  },
+  
+  // 4. 计算问题 - 几何计算
+  {
+    category: '计算问题 - 几何计算',
+    question: '计算边长为3、4、5的三角形的面积',
+    solution: '这是一个直角三角形，面积 = 底边 × 高 ÷ 2 = 3 × 4 ÷ 2 = 6',
+    description: '三角形面积计算'
+  },
+  
+  // 5. 证明问题 - 几何证明
+  {
+    category: '证明问题 - 几何证明',
+    question: '证明等腰三角形的两底角相等',
+    solution: '在等腰三角形中，两腰相等，根据等边对等角定理，两底角相等。',
+    description: '几何定理证明'
+  },
+  
+  // 6. 应用题 - 实际问题
+  {
+    category: '应用题 - 实际问题',
+    question: '一个长方形的长是8米，宽是6米，求其面积和周长',
+    solution: '面积 = 长 × 宽 = 8 × 6 = 48平方米\n周长 = 2(长 + 宽) = 2(8 + 6) = 28米',
+    description: '实际应用计算'
+  },
+  
+  // 7. 复杂问题 - 多步骤
+  {
+    category: '复杂问题 - 多步骤',
+    question: '解方程组：x + y = 10, 2x - y = 4',
+    solution: '步骤1：从第一个方程得 y = 10 - x\n步骤2：代入第二个方程：2x - (10 - x) = 4\n步骤3：2x - 10 + x = 4\n步骤4：3x = 14\n步骤5：x = 14/3\n步骤6：y = 10 - 14/3 = 16/3',
+    description: '二元一次方程组'
+  },
+  
+  // 8. 特殊问题 - 拉窗帘原理
+  {
+    category: '特殊问题 - 拉窗帘原理',
+    question: '解释三角形面积不变的拉窗帘原理',
+    solution: '拉窗帘原理：当三角形的底边固定，顶点在平行于底边的直线上移动时，三角形的高保持不变，因此面积不变。',
+    description: '特殊几何原理'
   }
+]
 
-  // 测试用例1: 标准AI响应格式
-  testCase1 = {
-    name: "标准三角形面积计算",
-    content: `**问题分析**
-这是一个基础的几何问题，要求计算一个三角形的面积。已知三角形的底边长度为8，高为6。
+// 测试结果统计
+let testResults = {
+  total: 0,
+  success: 0,
+  failed: 0,
+  details: []
+}
 
-**详细解题步骤**
-
-1. **步骤编号：1**  
-   **具体操作：写出三角形面积的计算公式**  
-   **详细解释：这个公式适用于所有类型的三角形**  
-   **中间结果：**  
-   $\text{面积} = \frac{1}{2} \times \text{底边} \times \text{高}$
-
-2. **步骤编号：2**  
-   **具体操作：先计算底边与高的乘积**  
-   **详细解释：简化计算步骤**  
-   **中间结果：**  
-   $8 \times 6 = 48$
-
-3. **步骤编号：3**  
-   **具体操作：再进行乘以1/2的运算**  
-   **详细解释：三角形面积是底乘高的一半**  
-   **中间结果：**  
-   $\frac{1}{2} \times 48 = 24$
-
-**最终答案**
-该三角形的面积是 **24**。`
-  };
-
-  // 测试用例2: 复杂代数方程
-  testCase2 = {
-    name: "复杂二次方程求解",
-    content: `**二次方程求解**
-
-**题目：** 解方程 x² - 5x + 6 = 0
-
-**解题思路**
-这是一个标准的二次方程，可以使用因式分解法求解。
-
-**详细步骤**
-
-1. **步骤编号：1**  
-   **具体操作：观察方程结构**  
-   **详细解释：识别这是一个标准的二次方程**  
-   **中间结果：方程形式为 x² - 5x + 6 = 0**
-
-2. **步骤编号：2**  
-   **具体操作：使用因式分解法**  
-   **详细解释：寻找两个数，乘积为6，和为-5**  
-   **中间结果：分解为 (x-2)(x-3) = 0**
-
-3. **步骤编号：3**  
-   **具体操作：求解方程**  
-   **详细解释：令每个因式等于零**  
-   **中间结果：x-2=0 或 x-3=0**
-
-4. **步骤编号：4**  
-   **具体操作：得出最终解**  
-   **详细解释：解得两个根**  
-   **中间结果：x=2 或 x=3**
-
-**验证**
-将解代入原方程验证正确性。`
-  };
-
-  // 测试用例3: 带重复步骤的响应
-  testCase3 = {
-    name: "带重复步骤的响应",
-    content: `**解题步骤**
-
-1. **移项**：将常数项移到等号右边
-2. **计算**：2x = 10
-3. **计算**：2x = 10  // 重复
-4. **求解**：x = 5
-5. **求解**：x = 5   // 重复
-6. **验证**：代入检验`
-  };
-
-  // 测试用例4: 混合格式响应
-  testCase4 = {
-    name: "混合格式响应",
-    content: `**问题描述**
-解方程组：
-\begin{cases}
-2x + y = 7 \\
-x - y = -1
-\end{cases}
-
-**解题步骤**
-
-**步骤1：理解题意**
-这是一个二元一次方程组，可以使用代入法或加减法求解。
-
-**步骤2：选择解法**
-选择加减法，因为两个方程相加可以消去y。
-
-**步骤3：执行计算**
-将两个方程相加：
-$(2x + y) + (x - y) = 7 + (-1)$
-$3x = 6$
-
-**步骤4：求解**
-$x = 2$
-
-**步骤5：回代求解**
-将x=2代入第一个方程：
-$2(2) + y = 7$
-$4 + y = 7$
-$y = 3$
-
-**最终答案**
-x=2, y=3`
-  };
-
-  // 测试用例5: 英文AI响应
-  testCase5 = {
-    name: "英文AI响应",
-    content: `**Problem Analysis**
-Solve the linear equation: 3x - 7 = 11
-
-**Step-by-Step Solution**
-
-1. **Step 1: Identify the equation type**
-   This is a linear equation in one variable.
-
-2. **Step 2: Isolate the variable term**
-   Add 7 to both sides: 3x - 7 + 7 = 11 + 7
-   Result: 3x = 18
-
-3. **Step 3: Solve for x**
-   Divide both sides by 3: (3x)/3 = 18/3
-   Final result: x = 6
-
-**Verification**
-Substitute x = 6 into original equation: 3(6) - 7 = 18 - 7 = 11 ✓`
-  };
-
-  // 测试用例6: 边缘情况 - 空响应
-  testCase6 = {
-    name: "空响应",
-    content: ""
-  };
-
-  // 测试用例7: 无编号响应
-  testCase7 = {
-    name: "无编号响应",
-    content: `**解题过程**
-
-首先，我们需要理解题目要求。这是一个基础的代数问题。
-
-然后，我们可以建立数学模型。根据题意，我们需要解一个方程。
-
-接下来，执行计算步骤。使用标准的代数方法求解。
-
-最后，验证结果确保答案正确。`
-  };
-
-  // 改进的提取函数（复制自修复后的代码）
-  extractAndSortSteps(aiContent) {
-    console.log('🔍 开始智能步骤提取...');
-    console.log('原始内容长度:', aiContent.length);
+// 主测试函数
+async function runComprehensiveTest() {
+  console.log('🎯 开始全面测试套件...')
+  console.log('=' * 60)
+  
+  const mathVideoAI = new MathVideoAIService()
+  
+  for (let i = 0; i < testCases.length; i++) {
+    const testCase = testCases[i]
+    console.log(`\n📋 测试 ${i + 1}/${testCases.length}: ${testCase.category}`)
+    console.log(`📝 问题: ${testCase.question}`)
+    console.log(`📚 解答: ${testCase.solution.substring(0, 50)}...`)
     
-    const steps = [];
+    testResults.total++
     
-    if (!aiContent || aiContent.trim().length === 0) {
-      console.log('⚠️ 空内容，返回默认步骤');
-      return ["分析题目", "建立模型", "逐步求解", "验证结果"];
-    }
-
-    // 1. 首先尝试匹配实际AI响应格式
-    const detailedStepPattern = /(?:^|\n)(\d+)[.、\)]?\s*(?:\*\*步骤编号：\1\*\*\s*\*\*具体操作：([^*]+)\*\*\s*\*\*详细解释：([^*]+)\*\*(?:\s*\*\*中间结果：\*\*\s*([^\n]*))?)/gm;
-    const detailedMatches = [...aiContent.matchAll(detailedStepPattern)];
-    
-    if (detailedMatches.length > 0) {
-      console.log(`✅ 找到 ${detailedMatches.length} 个详细步骤格式`);
+    try {
+      const startTime = Date.now()
       
-      detailedMatches.forEach(match => {
-        const stepNum = parseInt(match[1]);
-        const operation = match[2] ? match[2].trim() : '';
-        const explanation = match[3] ? match[3].trim() : '';
-        const result = match[4] ? match[4].trim() : '';
-        
-        let fullContent = operation;
-        if (explanation && !operation.includes(explanation)) {
-          fullContent += '：' + explanation;
-        }
-        if (result && result.trim() && !result.includes('$')) {
-          fullContent += '，结果：' + result.trim();
-        }
-        
-        if (fullContent.length > 10) {
-          steps[stepNum - 1] = fullContent;
-        }
-      });
+      // 调用视频生成服务
+      const result = await mathVideoAI.generateMathVideo(
+        testCase.question,
+        testCase.solution,
+        'zh'
+      )
       
-      const validSteps = steps.filter(step => step && step.length > 0);
-      if (validSteps.length > 0) {
-        console.log(`✅ 成功提取 ${validSteps.length} 个详细步骤`);
-        return validSteps;
+      const endTime = Date.now()
+      const duration = (endTime - startTime) / 1000
+      
+      // 验证结果
+      const validation = await validateTestResult(result, testCase, duration)
+      
+      if (validation.success) {
+        testResults.success++
+        console.log(`✅ 测试通过 (${duration.toFixed(2)}s)`)
+        console.log(`   🎬 视频文件: ${validation.videoFile}`)
+        console.log(`   🎤 音频文件: ${validation.audioFile}`)
+        console.log(`   📄 脚本文件: ${validation.scriptFile}`)
+      } else {
+        testResults.failed++
+        console.log(`❌ 测试失败: ${validation.error}`)
       }
-    }
-
-    // 2. 尝试匹配带标题的步骤
-    const titledStepPattern = /(?:^|\n)(\d+)[.、\)]\s*\*\*([^*]+)\*\*\s*([^\n]+)/gm;
-    const titledMatches = [...aiContent.matchAll(titledStepPattern)];
-    
-    if (titledMatches.length > 0) {
-      console.log(`✅ 找到 ${titledMatches.length} 个带标题步骤`);
       
-      titledMatches.forEach(match => {
-        const stepNum = parseInt(match[1]);
-        const title = match[2] ? match[2].trim() : '';
-        const content = match[3] ? match[3].trim() : '';
-        
-        let fullContent = title;
-        if (content && !title.includes(content)) {
-          fullContent += '：' + content;
-        }
-        
-        if (fullContent.length > 10) {
-          steps[stepNum - 1] = fullContent;
-        }
-      });
+      testResults.details.push({
+        category: testCase.category,
+        question: testCase.question,
+        success: validation.success,
+        duration: duration,
+        error: validation.error,
+        files: validation.files
+      })
       
-      const validSteps = steps.filter(step => step && step.length > 0);
-      if (validSteps.length > 0) {
-        return validSteps;
-      }
+    } catch (error) {
+      testResults.failed++
+      console.log(`❌ 测试异常: ${error.message}`)
+      testResults.details.push({
+        category: testCase.category,
+        question: testCase.question,
+        success: false,
+        error: error.message
+      })
     }
-
-    // 3. 提取普通编号步骤
-    let filteredContent = aiContent;
-    filteredContent = filteredContent.replace(/\*\*/g, '');
-    filteredContent = filteredContent.replace(/^#+.*?\n/gm, '');
     
-    const stepPattern = /(?:^|\n)(\d+)[.、\)]\s*([^\n]+)/gm;
-    const matches = [...filteredContent.matchAll(stepPattern)];
-    
-    if (matches.length > 0) {
-      console.log(`✅ 找到 ${matches.length} 个普通编号步骤`);
-      
-      const extractedSteps = matches.map(match => {
-        const content = match[2].trim();
-        return content.replace(/^步骤[:：]?\s*/i, '').trim();
-      }).filter(content => content.length > 15);
-      
-      if (extractedSteps.length > 0) {
-        return extractedSteps.slice(0, 6);
-      }
-    }
-
-    // 4. 提取数学段落
-    const mathParagraphs = aiContent
-      .split('\n\n')
-      .map(p => p.trim())
-      .filter(p => p.length > 30 && (p.includes('=') || /\d+/.test(p)))
-      .filter(p => !p.startsWith('**最终答案'));
-    
-    if (mathParagraphs.length >= 2) {
-      console.log(`✅ 找到 ${mathParagraphs.length} 个数学段落`);
-      return mathParagraphs.slice(0, 6);
-    }
-
-    // 5. 默认步骤
-    console.log('⚠️ 使用默认步骤');
-    return ["分析题目", "建立模型", "逐步求解", "验证结果"];
+    // 测试间隔
+    await new Promise(resolve => setTimeout(resolve, 2000))
   }
+  
+  // 生成测试报告
+  await generateTestReport()
+}
 
-  // 去重测试
-  removeDuplicateSteps(steps) {
-    console.log('🧹 开始智能去重...');
-    
-    const uniqueSteps = [];
-    const seenContent = new Set();
-    
-    for (const step of steps) {
-      const cleanStep = step.trim();
-      if (cleanStep && cleanStep.length > 10) {
-        // 基于数学内容指纹去重
-        const normalized = cleanStep
-          .toLowerCase()
-          .replace(/\s+/g, ' ')
-          .replace(/[^\w\+\-\=\×\÷\√\d]/g, '')
-          .substring(0, 100);
-        
-        if (!seenContent.has(normalized)) {
-          uniqueSteps.push(cleanStep);
-          seenContent.add(normalized);
-        }
+// 验证测试结果
+async function validateTestResult(result, testCase, duration) {
+  const fs = await import('fs')
+  
+  try {
+    // 检查返回结果
+    if (!result || !result.success) {
+      return {
+        success: false,
+        error: '视频生成失败',
+        files: {}
       }
     }
     
-    console.log(`📊 去重结果: ${steps.length} → ${uniqueSteps.length} 个步骤`);
-    return uniqueSteps;
-  }
-
-  // 运行测试
-  async runAllTests() {
-    console.log('🧪 开始综合测试套件...\n');
-    console.log('='.repeat(80));
+    // 检查生成的文件
+    const files = {}
+    let hasVideo = false
+    let hasAudio = false
+    let hasScript = false
     
-    const testCases = [
-      this.testCase1, this.testCase2, this.testCase3, 
-      this.testCase4, this.testCase5, this.testCase6, this.testCase7
-    ];
-    
-    let totalTests = 0;
-    let passedTests = 0;
-    
-    for (const testCase of testCases) {
-      console.log(`\n📊 测试用例: ${testCase.name}`);
-      console.log('-'.repeat(60));
-      
-      totalTests++;
-      
-      try {
-        // 测试步骤提取
-        const extracted = this.extractAndSortSteps(testCase.content);
-        const unique = this.removeDuplicateSteps(extracted);
-        
-        const success = this.validateTest(testCase, extracted, unique);
-        
-        if (success) {
-          passedTests++;
-          console.log('✅ 测试通过');
-        } else {
-          console.log('❌ 测试失败');
-        }
-        
-        this.testResults.extraction.push({
-          testCase: testCase.name,
-          extracted: extracted.length,
-          unique: unique.length,
-          success: success
-        });
-        
-      } catch (error) {
-        console.log('❌ 测试异常:', error.message);
-        this.testResults.extraction.push({
-          testCase: testCase.name,
-          error: error.message,
-          success: false
-        });
+    // 检查视频文件
+    if (result.video_path && fs.existsSync(result.video_path)) {
+      const videoStats = fs.statSync(result.video_path)
+      files.video = {
+        path: result.video_path,
+        size: videoStats.size,
+        sizeKB: (videoStats.size / 1024).toFixed(2)
       }
+      hasVideo = true
     }
     
-    // 测试边缘情况
-    await this.testEdgeCases();
+    // 检查音频文件
+    if (result.audio_path && fs.existsSync(result.audio_path)) {
+      const audioStats = fs.statSync(result.audio_path)
+      files.audio = {
+        path: result.audio_path,
+        size: audioStats.size,
+        sizeKB: (audioStats.size / 1024).toFixed(2)
+      }
+      hasAudio = true
+    }
     
-    // 生成测试报告
-    this.generateReport(totalTests, passedTests);
+    // 检查脚本文件
+    const scriptPath = result.script_path || `rendered_videos/manim_script_${Date.now()}.py`
+    if (fs.existsSync(scriptPath)) {
+      const scriptStats = fs.statSync(scriptPath)
+      files.script = {
+        path: scriptPath,
+        size: scriptStats.size,
+        sizeKB: (scriptStats.size / 1024).toFixed(2)
+      }
+      hasScript = true
+    }
+    
+    // 验证文件质量
+    const validation = {
+      success: hasVideo && hasAudio && hasScript,
+      duration: duration,
+      files: files,
+      videoFile: hasVideo ? `${files.video.sizeKB}KB` : '未生成',
+      audioFile: hasAudio ? `${files.audio.sizeKB}KB` : '未生成',
+      scriptFile: hasScript ? `${files.script.sizeKB}KB` : '未生成'
+    }
+    
+    if (!validation.success) {
+      validation.error = `缺少必要文件: 视频=${hasVideo}, 音频=${hasAudio}, 脚本=${hasScript}`
+    }
+    
+    return validation
+    
+  } catch (error) {
+    return {
+      success: false,
+      error: `验证异常: ${error.message}`,
+      files: {}
+    }
   }
+}
 
-  validateTest(testCase, extracted, unique) {
-    console.log(`提取步骤: ${extracted.length} 个`);
-    console.log(`去重后: ${unique.length} 个`);
-    
-    if (extracted.length === 0) {
-      console.log('⚠️ 未提取到任何步骤');
-      return false;
+// 生成测试报告
+async function generateTestReport() {
+  console.log('\n' + '=' * 60)
+  console.log('📊 全面测试报告')
+  console.log('=' * 60)
+  
+  console.log(`\n📈 总体统计:`)
+  console.log(`   总测试数: ${testResults.total}`)
+  console.log(`   成功数: ${testResults.success}`)
+  console.log(`   失败数: ${testResults.failed}`)
+  console.log(`   成功率: ${((testResults.success / testResults.total) * 100).toFixed(2)}%`)
+  
+  console.log(`\n📋 详细结果:`)
+  testResults.details.forEach((detail, index) => {
+    const status = detail.success ? '✅' : '❌'
+    const duration = detail.duration ? `(${detail.duration.toFixed(2)}s)` : ''
+    console.log(`   ${status} ${index + 1}. ${detail.category} ${duration}`)
+    if (!detail.success && detail.error) {
+      console.log(`      ❌ 错误: ${detail.error}`)
     }
-    
-    // 检查是否使用了默认步骤
-    const defaultSteps = ["分析题目", "建立模型", "逐步求解", "验证结果"];
-    const usingDefaults = extracted.every(step => 
-      defaultSteps.some(defaultStep => step.includes(defaultStep))
-    );
-    
-    if (usingDefaults && extracted.length === 4) {
-      console.log('⚠️ 可能使用了默认步骤');
-      return false;
+    if (detail.files && detail.files.video) {
+      console.log(`      🎬 视频: ${detail.files.video.sizeKB}KB`)
     }
-    
-    // 检查是否有实际数学内容
-    const hasMathContent = extracted.some(step => 
-      /[\+\-\=\×\÷\√\d]/.test(step) || 
-      step.includes('计算') || 
-      step.includes('求解') ||
-      step.includes('equation')
-    );
-    
-    if (!hasMathContent) {
-      console.log('⚠️ 缺少数学内容');
-      return false;
+  })
+  
+  // 按类别统计
+  const categoryStats = {}
+  testResults.details.forEach(detail => {
+    if (!categoryStats[detail.category]) {
+      categoryStats[detail.category] = { total: 0, success: 0 }
     }
-    
-    // 检查去重效果
-    const duplicateCheck = extracted.length === unique.length || 
-                          (extracted.length - unique.length) <= 1;
-    
-    if (!duplicateCheck) {
-      console.log(`⚠️ 去重效果不佳: ${extracted.length} → ${unique.length}`);
+    categoryStats[detail.category].total++
+    if (detail.success) {
+      categoryStats[detail.category].success++
     }
-    
-    return true;
+  })
+  
+  console.log(`\n📊 按类别统计:`)
+  Object.entries(categoryStats).forEach(([category, stats]) => {
+    const successRate = ((stats.success / stats.total) * 100).toFixed(2)
+    console.log(`   ${category}: ${stats.success}/${stats.total} (${successRate}%)`)
+  })
+  
+  // 保存报告到文件
+  const fs = await import('fs')
+  const report = {
+    timestamp: new Date().toISOString(),
+    summary: {
+      total: testResults.total,
+      success: testResults.success,
+      failed: testResults.failed,
+      successRate: ((testResults.success / testResults.total) * 100).toFixed(2)
+    },
+    categoryStats: categoryStats,
+    details: testResults.details
   }
-
-  async testEdgeCases() {
-    console.log('\n\n🔍 边缘情况测试');
-    console.log('='.repeat(40));
-    
-    // 测试空内容
-    const emptyResult = this.extractAndSortSteps('');
-    console.log('空内容测试:', emptyResult.length > 0 ? '✅' : '❌');
-    
-    // 测试超长内容
-    const longContent = '这是一个很长的内容'.repeat(1000);
-    const longResult = this.extractAndSortSteps(longContent);
-    console.log('超长内容测试:', longResult.length <= 6 ? '✅' : '❌');
-    
-    // 测试特殊字符
-    const specialChars = '特殊字符：@#$%^&*()_+{}[]|\\:;"\'<>?,./';
-    const specialResult = this.extractAndSortSteps(specialChars);
-    console.log('特殊字符测试:', specialResult.length > 0 ? '✅' : '❌');
-  }
-
-  generateReport(totalTests, passedTests) {
-    console.log('\n\n📊 综合测试报告');
-    console.log('='.repeat(80));
-    console.log(`总测试用例: ${totalTests}`);
-    console.log(`通过测试: ${passedTests}`);
-    console.log(`通过率: ${((passedTests/totalTests) * 100).toFixed(1)}%`);
-    
-    console.log('\n📋 详细结果:');
-    this.testResults.extraction.forEach(result => {
-      const status = result.success ? '✅' : '❌';
-      console.log(`${status} ${result.testCase}: ${result.extracted || 0} → ${result.unique || 0}`);
-    });
-    
-    const summary = {
-      allTests: totalTests,
-      passed: passedTests,
-      failed: totalTests - passedTests,
-      successRate: ((passedTests/totalTests) * 100).toFixed(1) + '%',
-      timestamp: new Date().toISOString()
-    };
-    
-    console.log('\n🎯 测试结论:');
-    if (passedTests === totalTests) {
-      console.log('🎉 所有测试通过！修复成功！');
-    } else {
-      console.log(`⚠️ ${totalTests - passedTests} 个测试失败，需要进一步检查`);
-    }
-    
-    return summary;
+  
+  const reportPath = `comprehensive_test_report_${Date.now()}.json`
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2))
+  console.log(`\n📄 详细报告已保存到: ${reportPath}`)
+  
+  // 最终结论
+  console.log(`\n🎯 测试结论:`)
+  if (testResults.success === testResults.total) {
+    console.log(`   🎉 所有测试通过！系统运行正常。`)
+  } else if (testResults.success > testResults.total * 0.8) {
+    console.log(`   ✅ 大部分测试通过，系统基本正常，需要关注失败案例。`)
+  } else {
+    console.log(`   ⚠️ 较多测试失败，需要检查系统配置和依赖服务。`)
   }
 }
 
 // 运行测试
-const tester = new ComprehensiveTester();
-tester.runAllTests().then(() => {
-  console.log('\n✅ 综合测试完成！');
-});
+runComprehensiveTest().catch(error => {
+  console.error('❌ 测试套件执行失败:', error)
+  process.exit(1)
+})
