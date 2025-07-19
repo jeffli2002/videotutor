@@ -25,18 +25,21 @@ export class QuestionAnalyzer {
       // 原理、概念解释
       /(什么是|什么是|如何理解|为什么|原理|概念|定义)/,
       /(what is|how to understand|why|principle|concept|definition)/i,
-      // 演示、说明
-      /(演示|说明|解释|展示|动画演示)/,
-      /(demonstrate|explain|show|illustrate|visualize)/i,
+      // 演示、说明、生成
+      /(演示|说明|解释|展示|动画演示|生成.*动画|生成.*讲解)/,
+      /(demonstrate|explain|show|illustrate|visualize|generate.*animation|generate.*explanation)/i,
       // 拉窗帘原理等具体理论
-      /(拉窗帘原理|三角形面积不变|几何变换)/,
-      /(curtain principle|triangle area invariance|geometric transformation)/i,
+      /(拉窗帘原理|三角形面积不变|几何变换|面积不变)/,
+      /(curtain principle|triangle area invariance|geometric transformation|area invariance)/i,
       // 一般性问题
       /(怎么|如何|怎样|方法|技巧)/,
       /(how|method|technique|approach)/i,
       // 比较、区别
       /(区别|不同|比较|vs|versus)/,
-      /(difference|compare|versus|vs)/i
+      /(difference|compare|versus|vs)/i,
+      // 帮、请等请求性词汇
+      /(帮我|请|帮我生成|请生成)/,
+      /(help me|please|help me generate|please generate)/i
     ]
   }
 
@@ -56,8 +59,12 @@ export class QuestionAnalyzer {
       requiresConceptualExplanation: false
     }
     
-    // 检测具体数值
-    const hasSpecificNumbers = /\d+[\.\d]*/.test(question)
+    // 检测具体数值 - 排除度数等理论概念中的数字
+    const hasSpecificNumbers = /\d+[\.\d]*/.test(question) && 
+      !question.includes('180度') && !question.includes('360度') && 
+      !question.includes('90度') && !question.includes('π') &&
+      !question.includes('180°') && !question.includes('360°') && 
+      !question.includes('90°')
     analysis.hasSpecificNumbers = hasSpecificNumbers
     
     // 检测一般概念
@@ -80,8 +87,40 @@ export class QuestionAnalyzer {
       }
     })
     
+    // 优先检查特殊理论题目
+    if (question.includes('拉窗帘原理') || question.includes('面积不变') || 
+        question.includes('生成.*动画') || question.includes('生成.*讲解') ||
+        (question.includes('帮我') && question.includes('原理')) ||
+        question.includes('什么是') || question.includes('what is')) {
+      analysis.type = 'theoretical_question'
+      analysis.isTheoreticalQuestion = true
+      analysis.requiresConceptualExplanation = true
+      analysis.confidence = 0.9
+      analysis.reasoning = '检测到理论原理、概念解释或动画生成请求，需要概念解释和演示'
+    }
+    // 检查是否没有具体数字 - 通用理论问题
+    else if (!hasSpecificNumbers) {
+      // 特殊处理：如果包含"计算"、"求"等计算性词汇，但仍可能是演示性质
+      if ((question.includes('计算') || question.includes('求') || 
+           question.includes('calculate') || question.includes('find') ||
+           question.includes('solve')) && 
+          !question.includes('演示') && !question.includes('如何') &&
+          !question.includes('demonstrate') && !question.includes('how')) {
+        analysis.type = 'concrete_problem'
+        analysis.isConcreteProblem = true
+        analysis.requiresStepByStepSolution = true
+        analysis.confidence = 0.7
+        analysis.reasoning = '包含计算性词汇，倾向于具体求解问题'
+      } else {
+        analysis.type = 'theoretical_question'
+        analysis.isTheoreticalQuestion = true
+        analysis.requiresConceptualExplanation = true
+        analysis.confidence = 0.8
+        analysis.reasoning = '题目中没有具体数字，定义为通用理论问题，需要概念解释'
+      }
+    }
     // 综合分析
-    if (concreteScore > theoreticalScore && concreteScore >= 2) {
+    else if (concreteScore > theoreticalScore && concreteScore >= 2) {
       analysis.type = 'concrete_problem'
       analysis.isConcreteProblem = true
       analysis.requiresStepByStepSolution = true
