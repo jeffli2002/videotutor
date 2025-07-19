@@ -49,6 +49,7 @@ export class MathVideoController {
   // 整合所有结果
   integrateResults(question, analysis, script, animations, voiceover, language) {
     const result = {
+      success: true, // 添加success字段
       question: question,
       analysis: analysis,
       script: script,
@@ -151,7 +152,9 @@ export class MathVideoController {
       type: 'fallback'
     }
     
-    return this.integrateResults(question, analysis, script, animations, voiceover, language)
+    const fallbackResult = this.integrateResults(question, analysis, script, animations, voiceover, language)
+    fallbackResult.success = false // 备用内容标记为失败
+    return fallbackResult
   }
 
   // 获取问题类型统计

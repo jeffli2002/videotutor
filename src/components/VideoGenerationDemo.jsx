@@ -575,8 +575,18 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
         
         // 使用新的模块化服务生成视频
         const videoResult = await mathVideoService.generateMathVideo(question, steps.join('\n\n'), language)
-        manimVideoUrl = videoResult.animations?.[0]?.url || ''
-        console.log('✅ Manim视频生成结果:', manimVideoUrl)
+        console.log('✅ 模块化服务返回结果:', videoResult)
+        
+        // 检查模块化服务是否成功
+        if (videoResult && videoResult.success && videoResult.animations && videoResult.animations.length > 0) {
+          // 从模块化服务获取视频路径
+          const animation = videoResult.animations[0]
+          manimVideoUrl = animation.videoPath || animation.url || ''
+          console.log('✅ 模块化服务视频生成成功:', manimVideoUrl)
+        } else {
+          console.warn('⚠️ 模块化服务返回失败或空结果，使用备用方案')
+          manimVideoUrl = ''
+        }
       } catch (e) {
         console.error('❌ Manim渲染失败:', e)
       }
