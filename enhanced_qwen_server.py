@@ -89,14 +89,18 @@ class EnhancedQWENHandler(BaseHTTPRequestHandler):
             self.send_error(400, "Invalid JSON")
         except Exception as e:
             print(f"❌ 服务器错误: {str(e)}")
-            error_data = {
-                'error': f'Server error: {str(e)}',
-                'code': 'SERVER_ERROR'
-            }
-            self.send_response(500)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(error_data).encode('utf-8'))
+            try:
+                error_data = {
+                    'error': f'Server error: {str(e)}',
+                    'code': 'SERVER_ERROR'
+                }
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(error_data).encode('utf-8'))
+            except:
+                # 如果发送错误响应也失败，忽略异常
+                pass
 
     def try_sdk_connection(self, api_key, request_data):
         """尝试使用SDK连接"""

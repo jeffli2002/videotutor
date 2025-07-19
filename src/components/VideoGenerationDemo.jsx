@@ -5,8 +5,8 @@ import { Textarea } from './ui/textarea'
 import { Badge } from './ui/badge'
 import { Progress } from './ui/progress'
 import { CheckCircle, X, Upload, Mic, Play, Award, RefreshCw, Pause, RotateCcw, Download, Share2, FileText, Trash2, Save } from 'lucide-react'
-import { MathVideoAIService } from '../services/mathVideoAI'
-import userService from '../services/userService'
+import { MathVideoAIService } from '../services/mathVideoAI.js'
+import userService from '../services/userService.js'
 
 export default function VideoGenerationDemo({ user, onLoginRequired }) {
   // 创建数学视频AI服务实例

@@ -6,7 +6,7 @@ export class AnimationGenerator {
     this.questionAnalyzer = new QuestionAnalyzer()
     this.config = {
       manim: {
-        endpoint: 'http://localhost:8002/generate-video'
+        endpoint: 'http://localhost:5001/api/manim_render'
       }
     }
   }
@@ -43,7 +43,7 @@ export class AnimationGenerator {
         body: JSON.stringify({
           script: manimScript,
           output_name: `concrete_problem_${Date.now()}`,
-          question: question
+          scene_name: 'ConcreteProblemScene'
         })
       })
       
@@ -90,7 +90,7 @@ export class AnimationGenerator {
         body: JSON.stringify({
           script: manimScript,
           output_name: `theoretical_question_${Date.now()}`,
-          question: question
+          scene_name: question.includes('拉窗帘') ? 'CurtainPrincipleScene' : 'TheoreticalQuestionScene'
         })
       })
       
@@ -226,6 +226,11 @@ class ConcreteProblemScene(Scene):
   buildTheoreticalQuestionManimScript(concepts, question) {
     const conceptsStr = JSON.stringify(concepts)
     
+    // 检查是否为拉窗帘原理等特殊理论问题
+    if (question.includes('拉窗帘') || question.includes('面积不变')) {
+      return this.buildCurtainPrincipleManimScript(question)
+    }
+    
     return `from manim import *
 import warnings
 warnings.filterwarnings("ignore")
@@ -311,6 +316,149 @@ class TheoreticalQuestionScene(Scene):
             return VGroup(*text_objects)
         else:
             return Text(text, font_size=18, color=BLACK).next_to(concept_num, DOWN, buff=0.3)
+`
+  }
+
+  // 构建拉窗帘原理的专门Manim脚本
+  buildCurtainPrincipleManimScript(question) {
+    return `from manim import *
+import warnings
+warnings.filterwarnings("ignore")
+
+config.frame_rate = 30
+config.pixel_height = 1080
+config.pixel_width = 1920
+config.background_color = WHITE
+
+class CurtainPrincipleScene(Scene):
+    def construct(self):
+        self.camera.background_color = WHITE
+        
+        # 标题
+        title = Text("拉窗帘原理演示", font_size=36, color=BLUE, weight=BOLD).to_edge(UP)
+        self.play(Write(title), run_time=1.0)
+        self.wait(0.5)
+        
+        # 副标题
+        subtitle = Text("三角形面积不变原理", font_size=24, color=GRAY).next_to(title, DOWN, buff=0.3)
+        self.play(Write(subtitle), run_time=0.8)
+        self.wait(1.0)
+        
+        # 创建初始三角形
+        triangle = Polygon(
+            ORIGIN, 
+            RIGHT * 3, 
+            UP * 2, 
+            color=BLUE, 
+            fill_opacity=0.3
+        )
+        triangle.move_to(ORIGIN)
+        
+        # 显示三角形
+        self.play(Create(triangle), run_time=1.5)
+        
+        # 添加标签
+        A_label = Text("A", font_size=20, color=BLACK).next_to(triangle.get_vertices()[0], DOWN+LEFT, buff=0.2)
+        B_label = Text("B", font_size=20, color=BLACK).next_to(triangle.get_vertices()[1], DOWN+RIGHT, buff=0.2)
+        C_label = Text("C", font_size=20, color=BLACK).next_to(triangle.get_vertices()[2], UP, buff=0.2)
+        
+        self.play(Write(A_label), Write(B_label), Write(C_label), run_time=1.0)
+        self.wait(1.0)
+        
+        # 显示面积公式
+        area_formula = MathTex(r"S = \frac{1}{2} \times \text{底} \times \text{高}", font_size=28, color=BLACK)
+        area_formula.next_to(triangle, DOWN, buff=1.0)
+        self.play(Write(area_formula), run_time=1.2)
+        self.wait(2.0)
+        
+        # 演示拉窗帘过程
+        self.play(FadeOut(area_formula), run_time=0.8)
+        
+        # 创建中线
+        mid_point = (triangle.get_vertices()[0] + triangle.get_vertices()[1]) / 2
+        midline = Line(mid_point, triangle.get_vertices()[2], color=RED, stroke_width=3)
+        
+        # 显示中线
+        midline_label = Text("中线", font_size=18, color=RED).next_to(midline.get_center(), RIGHT, buff=0.3)
+        self.play(Create(midline), Write(midline_label), run_time=1.5)
+        self.wait(1.0)
+        
+        # 分割三角形
+        triangle1 = Polygon(
+            triangle.get_vertices()[0], 
+            mid_point, 
+            triangle.get_vertices()[2], 
+            color=GREEN, 
+            fill_opacity=0.4
+        )
+        triangle2 = Polygon(
+            mid_point, 
+            triangle.get_vertices()[1], 
+            triangle.get_vertices()[2], 
+            color=YELLOW, 
+            fill_opacity=0.4
+        )
+        
+        self.play(
+            FadeOut(triangle),
+            FadeOut(A_label),
+            FadeOut(B_label),
+            FadeOut(C_label),
+            FadeOut(midline_label),
+            run_time=1.0
+        )
+        
+        self.play(Create(triangle1), Create(triangle2), run_time=1.5)
+        self.wait(1.5)
+        
+        # 重新组合
+        self.play(
+            triangle1.animate.move_to(ORIGIN + LEFT * 2),
+            triangle2.animate.move_to(ORIGIN + RIGHT * 2),
+            run_time=2.0
+        )
+        
+        # 显示面积相等
+        equal_sign = MathTex(r"=", font_size=36, color=BLACK).move_to(ORIGIN)
+        self.play(Write(equal_sign), run_time=1.0)
+        self.wait(1.5)
+        
+        # 重新组合成原三角形
+        self.play(
+            triangle1.animate.move_to(ORIGIN),
+            triangle2.animate.move_to(ORIGIN),
+            FadeOut(equal_sign),
+            run_time=2.0
+        )
+        
+        # 显示最终三角形
+        final_triangle = Polygon(
+            ORIGIN, 
+            RIGHT * 3, 
+            UP * 2, 
+            color=BLUE, 
+            fill_opacity=0.3
+        )
+        
+        self.play(
+            FadeOut(triangle1),
+            FadeOut(triangle2),
+            Create(final_triangle),
+            run_time=1.5
+        )
+        
+        # 结论
+        conclusion = Text("面积保持不变！", font_size=32, color=GREEN, weight=BOLD)
+        conclusion.next_to(final_triangle, DOWN, buff=1.0)
+        self.play(Write(conclusion), run_time=1.2)
+        self.wait(3.0)
+        
+        # 最终总结
+        final_text = Text("拉窗帘原理：三角形沿中线分割后重新组合，面积不变", 
+                         font_size=20, color=BLACK)
+        final_text.next_to(conclusion, DOWN, buff=0.8)
+        self.play(Write(final_text), run_time=1.5)
+        self.wait(2.0)
 `
   }
 

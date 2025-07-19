@@ -6,7 +6,7 @@ export class TTSService {
     this.questionAnalyzer = new QuestionAnalyzer()
     this.config = {
       tts: {
-        endpoint: 'http://localhost:8003/tts'
+        endpoint: 'http://localhost:8003/api/tts'
       }
     }
   }
