@@ -119,7 +119,9 @@
       "Bash(git remote:*)",
       "Bash(sed:*)",
       "Bash(rg:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(ls:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   }

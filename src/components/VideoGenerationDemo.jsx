@@ -143,28 +143,28 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
       }
 
       // 只有AI解答成功后，才继续后续流程
-      console.log('📝 步骤3: 生成教学脚本')
-      setCurrentStep('📝 生成教学脚本...')
+      console.log('📝 步骤3: 使用模块化服务开始完整流程')
+      setCurrentStep('📝 正在分析问题和生成脚本...')
       setGenerationProgress(40)
-      await delay(1500)
+      await delay(1000)
 
-      console.log('🎬 步骤4: 创建数学动画')
-      setCurrentStep('🎬 创建数学动画...')
+      console.log('🎬 步骤4: 正在生成动画和语音内容')
+      setCurrentStep('🎬 正在生成Manim动画...')
       setGenerationProgress(60)
-      await delay(2000)
+      await delay(1000)
 
-      console.log('🎤 步骤5: 生成多语言语音')
-      setCurrentStep('🎤 合成多语言语音...')
+      console.log('🎤 步骤5: 正在合成语音解说')
+      setCurrentStep('🎤 正在合成TTS语音...')
       setGenerationProgress(80)
-      await delay(1500)
+      await delay(1000)
 
-      console.log('🎥 步骤6: 渲染最终视频')
-      setCurrentStep('🎥 渲染最终视频...')
+      console.log('🎥 步骤6: 正在整合完整教学视频')
+      setCurrentStep('🎥 正在整合完整教学视频...')
       setGenerationProgress(95)
-      await delay(2000)
+      await delay(1000)
 
-      console.log('🧮 步骤7: Manim动画生成')
-      setCurrentStep('🧮 Manim动画生成中...')
+      console.log('🧮 步骤7: 完成模块化视频生成')
+      setCurrentStep('🧮 完成模块化视频生成...')
       setGenerationProgress(98)
       // 优化步骤提取逻辑，严格提取详细解题步骤
       // 获取AI解答内容，支持不同的响应格式
@@ -566,47 +566,46 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
           console.log(`步骤 ${i + 1}: ${steps[i].substring(0, 80)}${steps[i].length > 80 ? '...' : ''}`)
         }
       }
-      let manimVideoUrl = ''
-      try {
-        console.log('🎬 准备调用Manim生成视频，步骤顺序:')
-        steps.forEach((step, index) => {
-          console.log(`  ${index + 1}. ${step}`)
-        })
-        
-        // 强制使用模块化服务生成视频
-        console.log('🔄 强制调用mathVideoService.generateMathVideo...')
-        console.log('📝 参数:', { question, solution: steps.join('\n\n'), language })
-        
-        const videoResult = await mathVideoService.generateMathVideo(question, steps.join('\n\n'), language)
-        console.log('🟢 完整 videoResult:', JSON.stringify(videoResult, null, 2))
-        console.log('✅ 模块化服务返回结果:', videoResult)
-        
-        // 检查模块化服务是否成功
-        if (videoResult && videoResult.success && videoResult.animations && videoResult.animations.length > 0) {
-          // 从模块化服务获取视频路径
-          const animation = videoResult.animations[0]
-          console.log('🎬 animation对象:', JSON.stringify(animation, null, 2))
-          manimVideoUrl = animation.videoPath || animation.url || ''
-          console.log('✅ 模块化服务视频生成成功:', manimVideoUrl)
-        } else {
-          console.warn('⚠️ 模块化服务返回失败或空结果，使用备用方案')
-          console.warn('❌ videoResult.success:', videoResult?.success)
-          console.warn('❌ videoResult.animations:', videoResult?.animations)
-          manimVideoUrl = ''
-        }
-      } catch (e) {
-        console.error('❌ 模块化服务调用失败:', e, e?.stack || '')
-        console.error('🔍 详细错误信息:', {
-          name: e.name,
-          message: e.message,
-          stack: e.stack
-        })
-        if (typeof window !== 'undefined' && window.alert) {
-          window.alert('模块化服务调用失败，请查看控制台详细错误！')
-        }
-        // 不继续执行，直接抛出异常
-        throw e
+      console.log('🎬 准备调用模块化服务生成完整教学视频')
+      steps.forEach((step, index) => {
+        console.log(`  ${index + 1}. ${step}`)
+      })
+      
+      // 严格使用模块化服务，不允许任何绕过
+      console.log('🔄 调用mathVideoService.generateMathVideo（模块化服务）...')
+      console.log('📝 参数:', { question, solution: steps.join('\n\n'), language })
+      
+      const videoResult = await mathVideoService.generateMathVideo(question, steps.join('\n\n'), language)
+      console.log('🟢 完整 videoResult:', JSON.stringify(videoResult, null, 2))
+      
+      if (!videoResult) {
+        throw new Error('模块化服务返回null结果')
       }
+      
+      if (videoResult.success === false) {
+        throw new Error(`模块化服务失败: ${videoResult.error || '未知错误'}`)
+      }
+      
+      if (!videoResult.animations || videoResult.animations.length === 0) {
+        throw new Error('模块化服务未生成动画结果')
+      }
+      
+      // 从模块化服务获取完整结果
+      const animation = videoResult.animations[0]
+      console.log('🎬 模块化服务生成的动画对象:', JSON.stringify(animation, null, 2))
+      
+      // 确保使用模块化服务的返回结果
+      const manimVideoUrl = animation.videoPath || animation.url
+      if (!manimVideoUrl) {
+        throw new Error('模块化服务未返回有效的视频路径')
+      }
+      
+      console.log('✅ 模块化服务完整流程成功:', {
+        videoUrl: manimVideoUrl,
+        questionAnalysis: videoResult.analysis,
+        script: videoResult.script,
+        voiceover: videoResult.voiceover
+      })
 
       console.log('✅ 步骤8: 完成')
       setCurrentStep('✅ 完成!')
