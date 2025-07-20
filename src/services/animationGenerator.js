@@ -40,7 +40,18 @@ export class AnimationGenerator {
       // 生成Manim脚本
       const manimScript = this.buildConcreteProblemManimScript(steps, question)
       
+      // 生成TTS音频
+      console.log('🎤 生成TTS音频...')
+      const ttsText = this.generateTTSContent(question, steps, language)
+      const audioResult = await this.generateTTSAudio(ttsText, language)
+      
+      if (!audioResult.success) {
+        console.warn('❌ TTS音频生成失败:', audioResult.error)
+        return this.generateStaticVisuals(question, script)
+      }
+      
       // 调用Manim服务器生成视频
+      console.log('🎬 调用Manim服务器生成视频...')
       const response = await fetch(this.config.manim.endpoint, {
         method: 'POST',
         headers: {
@@ -48,26 +59,48 @@ export class AnimationGenerator {
         },
         body: JSON.stringify({
           script: manimScript,
-          output_name: `concrete_problem_${Date.now()}`,
-          scene_name: 'ConcreteProblemScene'
+          output_name: `qwen_video_${Date.now()}`,
+          scene_name: 'MathSolutionScene'
         })
       })
       
       const result = await response.json()
       
       if (result.success && result.video_path) {
-        console.log('✅ 具体问题动画生成成功:', result.video_path)
-        return [{
-          sceneId: 1,
-          animationType: 'concrete_problem',
-          videoPath: result.video_path,
-          duration: Math.max(20, steps.length * 8),
-          mathContent: steps.join('; '),
-          steps: steps,
-          script: script
-        }]
+        console.log('✅ Manim视频生成成功:', result.video_path)
+        
+        // 合并音频和视频
+        console.log('🎵 合并音频和视频...')
+        const mergeResult = await this.mergeAudioVideo(result.video_path, audioResult.audioPath)
+        
+        if (mergeResult.success) {
+          console.log('✅ 音频视频合并成功:', mergeResult.finalVideoPath)
+          return [{
+            sceneId: 1,
+            animationType: 'concrete_problem',
+            videoPath: mergeResult.finalVideoPath,
+            audioPath: audioResult.audioPath,
+            duration: Math.max(20, steps.length * 8),
+            mathContent: steps.join('; '),
+            steps: steps,
+            script: script,
+            hasAudio: true
+          }]
+        } else {
+          console.warn('❌ 音频视频合并失败，使用原始视频:', mergeResult.error)
+          return [{
+            sceneId: 1,
+            animationType: 'concrete_problem',
+            videoPath: result.video_path,
+            duration: Math.max(20, steps.length * 8),
+            mathContent: steps.join('; '),
+            steps: steps,
+            script: script,
+            hasAudio: false
+          }]
+        }
       } else {
-        console.warn('❌ 具体问题动画生成失败:', result.error)
+        console.warn('❌ Manim视频生成失败:', result.error)
         return this.generateStaticVisuals(question, script)
       }
       
@@ -97,7 +130,18 @@ export class AnimationGenerator {
       const sceneName = sceneNameMatch ? sceneNameMatch[1] + 'Scene' : 'TheoreticalQuestionScene'
       console.log('🎭 场景名称:', sceneName)
       
+      // 生成TTS音频
+      console.log('🎤 生成TTS音频...')
+      const ttsText = this.generateTTSContent(question, concepts, language)
+      const audioResult = await this.generateTTSAudio(ttsText, language)
+      
+      if (!audioResult.success) {
+        console.warn('❌ TTS音频生成失败:', audioResult.error)
+        return this.generateStaticVisuals(question, script)
+      }
+      
       // 调用Manim服务器生成视频
+      console.log('🎬 调用Manim服务器生成视频...')
       const response = await fetch(this.config.manim.endpoint, {
         method: 'POST',
         headers: {
@@ -105,40 +149,52 @@ export class AnimationGenerator {
         },
         body: JSON.stringify({
           script: manimScript,
-          output_name: `theoretical_question_${Date.now()}`,
-          scene_name: sceneName
+          output_name: `qwen_video_${Date.now()}`,
+          scene_name: 'MathSolutionScene'
         })
       })
       
       const result = await response.json()
       
       if (result.success && result.video_path) {
-        console.log('✅ 理论问题动画生成成功:', result.video_path)
-        
-        // 生成TTS音频
-        const ttsText = this.generateTTSContent(question, concepts, language)
-        const audioPath = await this.generateTTSAudio(ttsText, language)
+        console.log('✅ Manim视频生成成功:', result.video_path)
         
         // 合并音频和视频
-        let finalVideoPath = result.video_path
-        if (audioPath) {
-          finalVideoPath = await this.mergeAudioVideo(result.video_path, audioPath)
-        }
+        console.log('🎵 合并音频和视频...')
+        const mergeResult = await this.mergeAudioVideo(result.video_path, audioResult.audioPath)
         
-        return [{
-          sceneId: 1,
-          animationType: 'theoretical_question',
-          videoPath: finalVideoPath,
-          audioPath: audioPath,
-          duration: Math.max(25, concepts.length * 10),
-          mathContent: concepts.join('; '),
-          concepts: concepts,
-          script: script,
-          topic: topic,
-          aiGenerated: true
-        }]
+        if (mergeResult.success) {
+          console.log('✅ 音频视频合并成功:', mergeResult.finalVideoPath)
+          return [{
+            sceneId: 1,
+            animationType: 'theoretical_question',
+            videoPath: mergeResult.finalVideoPath,
+            audioPath: audioResult.audioPath,
+            duration: Math.max(25, concepts.length * 10),
+            mathContent: concepts.join('; '),
+            concepts: concepts,
+            script: script,
+            topic: topic,
+            aiGenerated: true,
+            hasAudio: true
+          }]
+        } else {
+          console.warn('❌ 音频视频合并失败，使用原始视频:', mergeResult.error)
+          return [{
+            sceneId: 1,
+            animationType: 'theoretical_question',
+            videoPath: result.video_path,
+            duration: Math.max(25, concepts.length * 10),
+            mathContent: concepts.join('; '),
+            concepts: concepts,
+            script: script,
+            topic: topic,
+            aiGenerated: true,
+            hasAudio: false
+          }]
+        }
       } else {
-        console.warn('❌ 理论问题动画生成失败:', result.error)
+        console.warn('❌ Manim视频生成失败:', result.error)
         return this.generateStaticVisuals(question, script)
       }
       
@@ -697,15 +753,25 @@ class CurtainPrincipleScene(Scene):
         console.log('✅ TTS音频生成成功:', result.audio_path)
         // 修复音频路径，移除开头的斜杠
         const fixedAudioPath = result.audio_path.startsWith('/') ? result.audio_path.substring(1) : result.audio_path
-        return fixedAudioPath
+        return {
+          success: true,
+          audioPath: fixedAudioPath,
+          duration: result.duration || 10
+        }
       } else {
         console.warn('❌ TTS音频生成失败:', result.error)
-        return null
+        return {
+          success: false,
+          error: result.error || 'TTS音频生成失败'
+        }
       }
       
     } catch (error) {
       console.error('❌ TTS音频生成异常:', error)
-      return null
+      return {
+        success: false,
+        error: error.message
+      }
     }
   }
 
@@ -729,15 +795,24 @@ class CurtainPrincipleScene(Scene):
       
       if (result.success && result.final_video_path) {
         console.log('✅ 音频视频合并成功:', result.final_video_path)
-        return result.final_video_path
+        return {
+          success: true,
+          finalVideoPath: result.final_video_path
+        }
       } else {
         console.warn('❌ 音频视频合并失败:', result.error)
-        return videoPath // 返回原视频路径
+        return {
+          success: false,
+          error: result.error || '音频视频合并失败'
+        }
       }
       
     } catch (error) {
       console.error('❌ 音频视频合并异常:', error)
-      return videoPath // 返回原视频路径
+      return {
+        success: false,
+        error: error.message
+      }
     }
   }
 } 
