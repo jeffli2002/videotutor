@@ -573,8 +573,8 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
           console.log(`  ${index + 1}. ${step}`)
         })
         
-        // 使用新的模块化服务生成视频
-        console.log('🔄 开始调用mathVideoService.generateMathVideo...')
+        // 强制使用模块化服务生成视频
+        console.log('🔄 强制调用mathVideoService.generateMathVideo...')
         console.log('📝 参数:', { question, solution: steps.join('\n\n'), language })
         
         const videoResult = await mathVideoService.generateMathVideo(question, steps.join('\n\n'), language)
@@ -595,7 +595,7 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
           manimVideoUrl = ''
         }
       } catch (e) {
-        console.error('❌ Manim渲染失败:', e, e?.stack || '')
+        console.error('❌ 模块化服务调用失败:', e, e?.stack || '')
         console.error('🔍 详细错误信息:', {
           name: e.name,
           message: e.message,
@@ -604,6 +604,8 @@ export default function VideoGenerationDemo({ user, onLoginRequired }) {
         if (typeof window !== 'undefined' && window.alert) {
           window.alert('模块化服务调用失败，请查看控制台详细错误！')
         }
+        // 不继续执行，直接抛出异常
+        throw e
       }
 
       console.log('✅ 步骤8: 完成')
