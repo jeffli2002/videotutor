@@ -19,8 +19,203 @@ export class AnimationGenerator {
     }
   }
 
+  // 统一的TTS文本清理函数 - 支持多语言
+  cleanTextForTTS(text, language = 'en') {
+    if (!text) return '';
+    
+    // 清理Markdown格式（所有语言通用）
+    let cleanedText = text
+      .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove bold markers
+      .replace(/\*([^*]+)\*/g, '$1') // Remove italic markers
+      .replace(/#{1,6}\s+/g, '') // Remove heading markers
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links, keep text
+      .replace(/`([^`]+)`/g, '$1') // Remove inline code markers
+      .replace(/```[^`]*```/g, '') // Remove code blocks
+      .replace(/^\s*[-*+]\s+/gm, '') // Remove list markers
+      .replace(/^\s*\d+\.\s+/gm, '') // Remove ordered list markers
+      .replace(/\$\s*([^$]+)\s*\$/g, '$1') // Remove $ $ 
+      .replace(/\\[a-zA-Z]+/g, '') // Remove remaining LaTeX commands
+      .replace(/[{}[\]_^|]/g, '') // Remove LaTeX symbols
+      .replace(/\\\\/g, ''); // Remove backslashes
+    
+    // 语言特定的数学符号转换
+    const mathTranslations = {
+      en: {
+        '\\frac{([^}]+)}{([^}]+)}': '$1 over $2',
+        '\\^2': ' squared',
+        '\\^3': ' cubed',
+        '\\^([0-9]+)': ' to the power of $1',
+        '\\\\times|×': ' times',
+        '\\\\div|÷': ' divided by',
+        '\\\\sqrt{([^}]+)}': 'square root of $1',
+        '√': 'square root of',
+        '\\\\leq|≤': ' less than or equal to',
+        '\\\\geq|≥': ' greater than or equal to',
+        '\\\\neq|≠': ' not equal to',
+        '\\\\approx|≈': ' approximately equal to',
+        '\\\\pm|±': ' plus or minus',
+        '\\+': ' plus',
+        '-': ' minus',
+        '=': ' equals',
+        '<': ' less than',
+        '>': ' greater than',
+        '\\*': ' times',
+        '/': ' divided by',
+        '\\\\pi|π': 'pi',
+        '\\\\alpha|α': 'alpha',
+        '\\\\beta|β': 'beta',
+        '\\\\theta|θ': 'theta',
+        '\\\\lambda|λ': 'lambda'
+      },
+      zh: {
+        '\\frac{([^}]+)}{([^}]+)}': '$1分之$2',
+        '\\^2': '的平方',
+        '\\^3': '的立方',
+        '\\^([0-9]+)': '的$1次方',
+        '\\\\times|×': '乘',
+        '\\\\div|÷': '除以',
+        '\\\\sqrt{([^}]+)}': '根号$1',
+        '√': '根号',
+        '\\\\leq|≤': '小于等于',
+        '\\\\geq|≥': '大于等于',
+        '\\\\neq|≠': '不等于',
+        '\\\\approx|≈': '约等于',
+        '\\\\pm|±': '正负',
+        '\\+': '加',
+        '-': '减',
+        '=': '等于',
+        '<': '小于',
+        '>': '大于',
+        '\\*': '乘',
+        '/': '除以',
+        '\\\\pi|π': '派',
+        '\\\\alpha|α': '阿尔法',
+        '\\\\beta|β': '贝塔',
+        '\\\\theta|θ': '西塔',
+        '\\\\lambda|λ': '兰姆达'
+      },
+      es: {
+        '\\frac{([^}]+)}{([^}]+)}': '$1 sobre $2',
+        '\\^2': ' al cuadrado',
+        '\\^3': ' al cubo',
+        '\\^([0-9]+)': ' a la potencia $1',
+        '\\\\times|×': ' por',
+        '\\\\div|÷': ' dividido por',
+        '\\\\sqrt{([^}]+)}': 'raíz cuadrada de $1',
+        '√': 'raíz cuadrada de',
+        '\\\\leq|≤': ' menor o igual que',
+        '\\\\geq|≥': ' mayor o igual que',
+        '\\\\neq|≠': ' no igual a',
+        '\\\\approx|≈': ' aproximadamente igual a',
+        '\\\\pm|±': ' más o menos',
+        '\\+': ' más',
+        '-': ' menos',
+        '=': ' igual a',
+        '<': ' menor que',
+        '>': ' mayor que',
+        '\\*': ' por',
+        '/': ' dividido por',
+        '\\\\pi|π': 'pi',
+        '\\\\alpha|α': 'alfa',
+        '\\\\beta|β': 'beta',
+        '\\\\theta|θ': 'theta',
+        '\\\\lambda|λ': 'lambda'
+      },
+      ja: {
+        '\\frac{([^}]+)}{([^}]+)}': '$2分の$1',
+        '\\^2': 'の2乗',
+        '\\^3': 'の3乗',
+        '\\^([0-9]+)': 'の$1乗',
+        '\\\\times|×': 'かける',
+        '\\\\div|÷': 'わる',
+        '\\\\sqrt{([^}]+)}': '$1の平方根',
+        '√': '平方根',
+        '\\\\leq|≤': '以下',
+        '\\\\geq|≥': '以上',
+        '\\\\neq|≠': 'と等しくない',
+        '\\\\approx|≈': 'およそ',
+        '\\\\pm|±': 'プラスマイナス',
+        '\\+': 'たす',
+        '-': 'ひく',
+        '=': 'は',
+        '<': 'より小さい',
+        '>': 'より大きい',
+        '\\*': 'かける',
+        '/': 'わる',
+        '\\\\pi|π': 'パイ',
+        '\\\\alpha|α': 'アルファ',
+        '\\\\beta|β': 'ベータ',
+        '\\\\theta|θ': 'シータ',
+        '\\\\lambda|λ': 'ラムダ'
+      },
+      fr: {
+        '\\frac{([^}]+)}{([^}]+)}': '$1 sur $2',
+        '\\^2': ' au carré',
+        '\\^3': ' au cube',
+        '\\^([0-9]+)': ' à la puissance $1',
+        '\\\\times|×': ' fois',
+        '\\\\div|÷': ' divisé par',
+        '\\\\sqrt{([^}]+)}': 'racine carrée de $1',
+        '√': 'racine carrée de',
+        '\\\\leq|≤': ' inférieur ou égal à',
+        '\\\\geq|≥': ' supérieur ou égal à',
+        '\\\\neq|≠': ' différent de',
+        '\\\\approx|≈': ' environ égal à',
+        '\\\\pm|±': ' plus ou moins',
+        '\\+': ' plus',
+        '-': ' moins',
+        '=': ' égale',
+        '<': ' inférieur à',
+        '>': ' supérieur à',
+        '\\*': ' fois',
+        '/': ' divisé par',
+        '\\\\pi|π': 'pi',
+        '\\\\alpha|α': 'alpha',
+        '\\\\beta|β': 'bêta',
+        '\\\\theta|θ': 'thêta',
+        '\\\\lambda|λ': 'lambda'
+      }
+    };
+    
+    // 获取当前语言的翻译，默认使用英语
+    const translations = mathTranslations[language] || mathTranslations.en;
+    
+    // 应用数学符号翻译
+    for (const [pattern, replacement] of Object.entries(translations)) {
+      const regex = new RegExp(pattern, 'g');
+      cleanedText = cleanedText.replace(regex, replacement);
+    }
+    
+    // 标准化文本（根据语言调整）
+    if (language === 'zh' || language === 'ja') {
+      // 中文和日文使用特定的标点符号
+      cleanedText = cleanedText
+        .replace(/\s+/g, ' ')
+        .replace(/\n+/g, '，')
+        .replace(/[.。]+/g, '。')
+        .replace(/，+/g, '，')
+        .replace(/，。/g, '。')
+        .replace(/。，/g, '，')
+        .replace(/^\s*[，。]\s*/g, '')
+        .replace(/\s*[，。]\s*$/g, '');
+    } else {
+      // 西方语言使用标准标点
+      cleanedText = cleanedText
+        .replace(/\s+/g, ' ')
+        .replace(/\n+/g, ', ')
+        .replace(/\.+/g, '.')
+        .replace(/,+/g, ',')
+        .replace(/,\./g, '.')
+        .replace(/\.,/g, ',')
+        .replace(/^\s*[,.]\s*/g, '')
+        .replace(/\s*[,.]\s*$/g, '');
+    }
+    
+    return cleanedText.trim();
+  }
+
   // 根据问题类型生成相应的动画 - 确保每个问题都有独特的AI答案动画
-  async generateAnimation(question, solution, script, language = 'zh') {
+  async generateAnimation(question, solution, script, language = 'en') {
     const analysis = this.questionAnalyzer.analyzeQuestionType(question)
     
     // 优先使用基于AI答案的独特动画生成
@@ -1084,190 +1279,107 @@ config.output_file = "${outputName}"
     }
   }
 
-  // 生成TTS内容（遍历pages，每页内容都合成，自动去除LaTeX和特殊符号，确保内容完整）
-  generateTTSContentFromPages(pages) {
-    // 彻底清理文本，去除所有LaTeX和特殊符号
-    function cleanText(text) {
-      return text
-        .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '$1/$2') // 将 \frac{a}{b} 转换为 a/b
-        .replace(/\\times/g, '乘以') // 将 \times 转换为 乘以
-        .replace(/\\div/g, '除以') // 将 \div 转换为 除以
-        .replace(/\\sqrt\{([^}]+)\}/g, '根号$1') // 将 \sqrt{a} 转换为 根号a
-        .replace(/\\pi/g, 'π') // 将 \pi 转换为 π
-        .replace(/\\alpha/g, 'α') // 将 \alpha 转换为 α
-        .replace(/\\beta/g, 'β') // 将 \beta 转换为 β
-        .replace(/\\theta/g, 'θ') // 将 \theta 转换为 θ
-        .replace(/\\[\\$\\\\{}\\[\\]_\\^\\|<>]/g, '') // 去除剩余的LaTeX符号
-        .replace(/\\s+/g, ' ') // 多空格合一
-        .replace(/\\*/g, '') // 去除星号
-        .replace(/\\n/g, ' ') // 换行转空格
-        .replace(/\\./g, '。') // 句号标准化
-        .replace(/\\(.*?\\)/g, '') // 去除括号内容（如有）
-        .replace(/\\s{2,}/g, ' ') // 多余空格
-        .replace(/\\*\\*/g, '') // 去除双星号
-        .replace(/\$\s*([^$]+)\s*\$/g, '$1') // 去除 $ $ 包围的内容，保留内部文本
-        .replace(/^\s*\*\*\s*/g, '') // 去除开头的 **
-        .replace(/\s*\*\*\s*$/g, '') // 去除结尾的 **
-        .trim();
-    }
+  // 生成TTS内容（更简洁，支持多语言）
+  generateTTSContentFromPages(pages, language = 'en') {
+    if (!pages || pages.length === 0) return '';
     
-    // 智能过滤重复内容
-    const filteredPages = [];
+    // 语言特定的介绍词
+    const introductionPhrases = {
+      en: ['Let\'s solve this problem', 'Problem:', 'Question:'],
+      zh: ['让我们来解决这个数学问题', '题目：', '问题：'],
+      es: ['Resolvamos este problema', 'Problema:', 'Pregunta:'],
+      ja: ['この問題を解きましょう', '問題：', '質問：'],
+      fr: ['Résolvons ce problème', 'Problème:', 'Question:']
+    };
+    
+    const phrases = introductionPhrases[language] || introductionPhrases.en;
+    
+    // 过滤和清理页面内容
+    const processedContent = [];
     let hasIntro = false;
     
     pages.forEach((page, index) => {
-      const cleanContent = cleanText(page.text);
+      const cleanContent = this.cleanTextForTTS(page.text, language);
+      
+      // 跳过空内容
+      if (!cleanContent || cleanContent.length < 5) return;
       
       // 检查是否是介绍性内容
-      if (cleanContent.includes('让我们来解决这个数学问题') || 
-          cleanContent.includes('题目：') ||
-          cleanContent.startsWith('题目')) {
+      const isIntro = phrases.some(phrase => cleanContent.includes(phrase));
+      if (isIntro) {
         if (!hasIntro) {
-          filteredPages.push({ ...page, text: cleanContent });
+          processedContent.push(cleanContent);
           hasIntro = true;
         }
-        // 跳过重复的介绍
         return;
       }
       
-      // 检查是否是重复的步骤标题
-      if (cleanContent.includes('**') && filteredPages.some(p => 
-          p.text.includes(cleanContent.replace(/\*\*/g, '').trim()))) {
-        return; // 跳过重复的步骤标题
-      }
+      // 跳过重复内容
+      const isDuplicate = processedContent.some(content => 
+        content.includes(cleanContent) || cleanContent.includes(content)
+      );
+      if (isDuplicate) return;
       
-      // 检查是否是重复的验证内容
-      if (cleanContent.includes('验证') && filteredPages.some(p => 
-          p.text.includes('验证'))) {
-        return; // 跳过重复的验证
-      }
-      
-      filteredPages.push({ ...page, text: cleanContent });
+      processedContent.push(cleanContent);
     });
     
-    // 为瀑布式动画创建更精细的TTS内容
-    let ttsContent = ''
+    // 构建简洁的TTS内容
+    let ttsContent = '';
+    const separator = language === 'zh' || language === 'ja' ? '。' : '. ';
     
-    filteredPages.forEach((page, index) => {
-      const cleanContent = page.text;
+    processedContent.forEach((content, index) => {
+      // 限制每段内容的长度
+      const truncatedContent = content.length > 100 
+        ? content.substring(0, 97) + '...' 
+        : content;
       
-      if (index === 0) {
-        // 问题介绍 - 保持简洁
-        ttsContent += `${cleanContent}。`
-      } else if (index === filteredPages.length - 1) {
-        // 最后一步 - 根据内容类型调整
-        if (cleanContent.includes('验证') || cleanContent.includes('完成')) {
-          ttsContent += `${cleanContent}。`
-        } else {
-          ttsContent += `第${index}步，${cleanContent}。`
-        }
-      } else {
-        // 解题步骤 - 为瀑布式动画优化
-        // 移除多余的"第X步"前缀，让内容更自然
-        if (cleanContent.startsWith('第') && cleanContent.includes('步')) {
-          ttsContent += `${cleanContent}。`
-        } else {
-          ttsContent += `${cleanContent}。`
-        }
-      }
+      ttsContent += truncatedContent;
       
-      // 添加适当的停顿，匹配瀑布式动画的节奏
-      if (index < filteredPages.length - 1) {
-        ttsContent += ' '
+      // 添加适当的分隔符
+      if (index < processedContent.length - 1) {
+        ttsContent += separator;
       }
-    })
+    });
     
-    return ttsContent
+    // 确保内容不会太长（TTS限制）
+    const maxLength = 500;
+    if (ttsContent.length > maxLength) {
+      ttsContent = ttsContent.substring(0, maxLength - 3) + '...';
+    }
+    
+    return ttsContent;
   }
 
   // 为瀑布式动画生成分步TTS内容
-  generateStepByStepTTSContent(pages) {
-    // 彻底清理文本，去除所有LaTeX和特殊符号
-    function cleanText(text) {
-      return text
-        .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '$1/$2') // 将 \frac{a}{b} 转换为 a/b
-        .replace(/\\times/g, '乘以') // 将 \times 转换为 乘以
-        .replace(/\\div/g, '除以') // 将 \div 转换为 除以
-        .replace(/\\sqrt\{([^}]+)\}/g, '根号$1') // 将 \sqrt{a} 转换为 根号a
-        .replace(/\\pi/g, 'π') // 将 \pi 转换为 π
-        .replace(/\\alpha/g, 'α') // 将 \alpha 转换为 α
-        .replace(/\\beta/g, 'β') // 将 \beta 转换为 β
-        .replace(/\\theta/g, 'θ') // 将 \theta 转换为 θ
-        .replace(/\\[\\$\\\\{}\\[\\]_\\^\\|<>]/g, '') // 去除剩余的LaTeX符号
-        .replace(/\\s+/g, ' ') // 多空格合一
-        .replace(/\\*/g, '') // 去除星号
-        .replace(/\\n/g, ' ') // 换行转空格
-        .replace(/\\./g, '。') // 句号标准化
-        .replace(/\\(.*?\\)/g, '') // 去除括号内容（如有）
-        .replace(/\\s{2,}/g, ' ') // 多余空格
-        .replace(/\\*\\*/g, '') // 去除双星号
-        .replace(/\$\s*([^$]+)\s*\$/g, '$1') // 去除 $ $ 包围的内容，保留内部文本
-        .replace(/^\s*\*\*\s*/g, '') // 去除开头的 **
-        .replace(/\s*\*\*\s*$/g, '') // 去除结尾的 **
-        .trim();
-    }
+  generateStepByStepTTSContent(pages, language = 'en') {
+    if (!pages || pages.length === 0) return [];
     
-    // 智能过滤重复内容
-    const filteredPages = [];
-    let hasIntro = false;
+    const ttsSteps = [];
+    const processedTexts = new Set();
     
     pages.forEach((page, index) => {
-      const cleanContent = cleanText(page.text);
+      const cleanContent = this.cleanTextForTTS(page.text, language);
       
-      // 检查是否是介绍性内容
-      if (cleanContent.includes('让我们来解决这个数学问题') || 
-          cleanContent.includes('题目：') ||
-          cleanContent.startsWith('题目')) {
-        if (!hasIntro) {
-          filteredPages.push({ ...page, text: cleanContent });
-          hasIntro = true;
-        }
-        return;
-      }
+      // 跳过空内容或太短的内容
+      if (!cleanContent || cleanContent.length < 5) return;
       
-      // 检查是否是重复的步骤标题
-      if (cleanContent.includes('**') && filteredPages.some(p => 
-          p.text.includes(cleanContent.replace(/\*\*/g, '').trim()))) {
-        return;
-      }
+      // 跳过已处理的重复内容
+      if (processedTexts.has(cleanContent)) return;
+      processedTexts.add(cleanContent);
       
-      // 检查是否是重复的验证内容
-      if (cleanContent.includes('验证') && filteredPages.some(p => 
-          p.text.includes('验证'))) {
-        return;
-      }
+      // 为每个步骤创建简洁的TTS内容
+      const stepNumber = ttsSteps.length + 1;
+      const maxStepLength = 80; // 每步最大长度
       
-      filteredPages.push({ ...page, text: cleanContent });
-    });
-    
-    // 为瀑布式动画创建分步TTS内容
-    const ttsSteps = [];
-    
-    filteredPages.forEach((page, index) => {
-      const cleanContent = page.text;
+      const truncatedContent = cleanContent.length > maxStepLength 
+        ? cleanContent.substring(0, maxStepLength - 3) + '...' 
+        : cleanContent;
       
-      if (index === 0) {
-        // 问题介绍
-        ttsSteps.push({
-          step: index + 1,
-          text: cleanContent,
-          duration: Math.max(2.0, cleanContent.length * 0.1)
-        });
-      } else if (index === filteredPages.length - 1) {
-        // 最后一步
-        ttsSteps.push({
-          step: index + 1,
-          text: cleanContent,
-          duration: Math.max(2.0, cleanContent.length * 0.1)
-        });
-      } else {
-        // 解题步骤
-        ttsSteps.push({
-          step: index + 1,
-          text: cleanContent,
-          duration: Math.max(2.0, cleanContent.length * 0.1)
-        });
-      }
+      ttsSteps.push({
+        step: stepNumber,
+        text: truncatedContent,
+        duration: Math.max(2.0, truncatedContent.length * 0.05) // 简化的时长计算
+      });
     });
     
     return ttsSteps;

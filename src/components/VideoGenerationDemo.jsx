@@ -1058,30 +1058,38 @@ Please ensure each step is detailed and complete, suitable for K12 students to u
       return
     }
     
-    // First check if video file exists
+    // First check if video file exists (only for non-merged videos)
     try {
       const videoUrl = result.video?.url || result.video?.videoUrl;
-      if (videoUrl) {
+      if (videoUrl && !videoUrl.includes('merged_')) {
         console.log('🔍 检查视频文件:', videoUrl);
         
-        // Try to fetch video headers to check if it exists
-        const response = await fetch(videoUrl, { method: 'HEAD' });
-        if (!response.ok) {
-          console.error('❌ 视频文件不存在或无法访问:', response.status);
-          // Use fallback video if original doesn't exist
-          if (result.video) {
-            result.video.url = '/rendered_videos/fallback_video.mp4';
-            result.video.videoUrl = '/rendered_videos/fallback_video.mp4';
-            console.log('🔄 使用备用视频');
+        // Skip check for newly generated videos as they should exist
+        if (videoUrl.includes('ai_solution_') || videoUrl.includes('merged_')) {
+          console.log('✅ 跳过新生成视频的检查');
+        } else {
+          // Try to fetch video headers to check if it exists
+          const response = await fetch(videoUrl, { method: 'HEAD' });
+          if (!response.ok) {
+            console.error('❌ 视频文件不存在或无法访问:', response.status);
+            // Use fallback video if original doesn't exist
+            if (result.video) {
+              result.video.url = '/rendered_videos/fallback_video.mp4';
+              result.video.videoUrl = '/rendered_videos/fallback_video.mp4';
+              console.log('🔄 使用备用视频');
+            }
           }
         }
       }
     } catch (error) {
       console.error('❌ 检查视频失败:', error);
-      // Use fallback on any error
-      if (result.video) {
-        result.video.url = '/rendered_videos/fallback_video.mp4';
-        result.video.videoUrl = '/rendered_videos/fallback_video.mp4';
+      // Don't use fallback for merged videos
+      const videoUrl = result.video?.url || result.video?.videoUrl;
+      if (!videoUrl?.includes('merged_') && !videoUrl?.includes('ai_solution_')) {
+        if (result.video) {
+          result.video.url = '/rendered_videos/fallback_video.mp4';
+          result.video.videoUrl = '/rendered_videos/fallback_video.mp4';
+        }
       }
     }
     

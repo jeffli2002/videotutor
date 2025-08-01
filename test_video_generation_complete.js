@@ -63,7 +63,8 @@ async function testCompleteVideoGeneration() {
       if (animation.steps && animation.steps.length > 0) {
         console.log('\n📝 生成的步骤:')
         animation.steps.forEach((step, index) => {
-          console.log(`${index + 1}. ${step.substring(0, 50)}...`)
+          const stepText = typeof step === 'string' ? step : (step.text || step.content || JSON.stringify(step))
+          console.log(`${index + 1}. ${stepText.substring(0, 50)}...`)
         })
       }
     }
