@@ -1,166 +1,125 @@
-// 完整的视频生成测试
-console.log('🎬 完整视频生成测试...\n')
+import { QuestionAnalyzer } from './src/services/questionAnalyzer.js'
+import { readFileSync } from 'fs'
+import { join } from 'path'
+
+// 加载.env文件
+try {
+  const envPath = join(process.cwd(), '.env')
+  const envContent = readFileSync(envPath, 'utf8')
+  
+  // 解析.env文件内容
+  envContent.split('\n').forEach(line => {
+    const [key, ...valueParts] = line.split('=')
+    if (key && valueParts.length > 0) {
+      const value = valueParts.join('=').trim()
+      if (!key.startsWith('#') && value) {
+        process.env[key.trim()] = value.replace(/^["']|["']$/g, '')
+      }
+    }
+  })
+  console.log('✅ 成功加载.env文件')
+} catch (error) {
+  console.log('⚠️ 无法加载.env文件，使用默认配置')
+  process.env.VITE_KIMI_API_KEY = 'your-kimi-api-key-here'
+  process.env.VITE_KIMI_API_ENDPOINT = 'https://api.moonshot.cn/v1/chat/completions'
+}
 
 async function testCompleteVideoGeneration() {
-  const testQuestion = '帮我用视频动画解释勾股定理'
+  console.log('🎬 开始完整视频生成流程测试...')
   
-  console.log('📝 测试问题:', testQuestion)
+  const questionAnalyzer = new QuestionAnalyzer()
   
-  // 构建修复后的勾股定理Manim脚本
-  const manimScript = `from manim import *
-import warnings
-warnings.filterwarnings("ignore")
-
-config.frame_rate = 30
-config.pixel_height = 1080
-config.pixel_width = 1920
-config.background_color = WHITE
-
-class FixedPythagoreanScene(Scene):
-    def construct(self):
-        self.camera.background_color = WHITE
-        
-        # 标题
-        title = Text("勾股定理演示", font_size=36, color=BLUE).to_edge(UP)
-        self.play(Write(title), run_time=1.0)
-        self.wait(0.5)
-        
-        # 副标题
-        subtitle = Text("a² + b² = c²", font_size=28, color=BLACK).next_to(title, DOWN, buff=0.5)
-        self.play(Write(subtitle), run_time=0.8)
-        self.wait(1.0)
-        
-        # 创建直角三角形
-        triangle = Polygon(
-            ORIGIN, 
-            RIGHT * 3, 
-            UP * 4, 
-            color=BLUE, 
-            fill_opacity=0.3
-        )
-        triangle.move_to(ORIGIN)
-        
-        # 显示三角形
-        self.play(Create(triangle), run_time=1.5)
-        
-        # 添加标签 - 修复位置避免重叠
-        A_label = Text("A", font_size=20, color=BLACK).next_to(triangle.get_vertices()[0], DOWN+LEFT, buff=0.4)
-        B_label = Text("B", font_size=20, color=BLACK).next_to(triangle.get_vertices()[1], DOWN+RIGHT, buff=0.4)
-        C_label = Text("C", font_size=20, color=BLACK).next_to(triangle.get_vertices()[2], UP, buff=0.4)
-        
-        self.play(Write(A_label), Write(B_label), Write(C_label), run_time=1.0)
-        self.wait(1.0)
-        
-        # 显示边长 - 增加间距
-        a_label = MathTex("a = 3", font_size=24, color=BLACK).next_to(triangle.get_vertices()[0], DOWN, buff=0.8)
-        b_label = MathTex("b = 4", font_size=24, color=BLACK).next_to(triangle.get_vertices()[1], RIGHT, buff=0.8)
-        c_label = MathTex("c = 5", font_size=24, color=BLACK).next_to(triangle.get_vertices()[2], UP+RIGHT, buff=0.8)
-        
-        self.play(Write(a_label), Write(b_label), Write(c_label), run_time=1.2)
-        self.wait(2.0)
-        
-        # 显示勾股定理公式
-        formula = MathTex(r"a^2 + b^2 = c^2", font_size=32, color=BLACK)
-        formula.next_to(triangle, DOWN, buff=2.0)
-        self.play(Write(formula), run_time=1.5)
-        self.wait(1.0)
-        
-        # 显示计算过程 - 增加间距
-        calc1 = MathTex(r"3^2 + 4^2 = 5^2", font_size=28, color=BLACK)
-        calc1.next_to(formula, DOWN, buff=0.8)
-        self.play(Write(calc1), run_time=1.0)
-        self.wait(1.0)
-        
-        calc2 = MathTex(r"9 + 16 = 25", font_size=28, color=BLACK)
-        calc2.next_to(calc1, DOWN, buff=0.5)
-        self.play(Write(calc2), run_time=1.0)
-        self.wait(1.0)
-        
-        calc3 = MathTex(r"25 = 25", font_size=28, color=GREEN)
-        calc3.next_to(calc2, DOWN, buff=0.5)
-        self.play(Write(calc3), run_time=1.0)
-        self.wait(2.0)
-        
-        # 结论
-        conclusion = Text("勾股定理验证成功！", font_size=32, color=GREEN)
-        conclusion.next_to(calc3, DOWN, buff=1.0)
-        self.play(Write(conclusion), run_time=1.2)
-        self.wait(3.0)
-        
-        # 最终总结
-        final_text = Text("在直角三角形中，两直角边的平方和等于斜边的平方", 
-                         font_size=20, color=BLACK)
-        final_text.next_to(conclusion, DOWN, buff=1.0)
-        self.play(Write(final_text), run_time=1.5)
-        self.wait(2.0)
-`
+  // 测试问题
+  const testQuestions = [
+    '求底边为8，高为6的三角形面积',
+    '解方程：2x + 5 = 15',
+    '计算圆的面积，半径是5'
+  ]
   
-  console.log('📝 Manim脚本长度:', manimScript.length)
-  console.log('📝 Manim脚本前200字符:')
-  console.log(manimScript.substring(0, 200) + '...')
-  
-  try {
-    console.log('\n🎬 调用Manim API...')
-    const response = await fetch('http://localhost:5001/api/manim_render', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        script: manimScript,
-        output_name: `fixed_pythagorean_${Date.now()}`,
-        scene_name: 'FixedPythagoreanScene'
-      })
-    })
+  for (let i = 0; i < testQuestions.length; i++) {
+    const question = testQuestions[i]
+    console.log(`\n📝 测试问题 ${i + 1}: ${question}`)
     
-    console.log('📊 响应状态:', response.status)
-    
-    if (response.ok) {
-      const result = await response.json()
-      console.log('✅ Manim API调用成功:')
-      console.log('📊 响应数据:', result)
+    try {
+      // 1. 生成Manim脚本
+      console.log('🤖 生成Manim脚本...')
+      const script = await questionAnalyzer.generateManimScript(question)
       
-      if (result.success) {
-        console.log('🎉 视频生成成功！')
-        console.log('📹 视频路径:', result.video_path)
-        console.log('📊 分辨率:', result.resolution)
-        console.log('📊 分段数量:', result.segment_count)
-        
-        // 测试TTS
-        console.log('\n🎤 测试TTS...')
-        const ttsResponse = await fetch('http://localhost:8003/api/tts', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            text: '勾股定理演示完成，视频生成成功！',
-            language: 'zh',
-            engine: 'auto'
-          })
-        })
-        
-        if (ttsResponse.ok) {
-          const ttsResult = await ttsResponse.json()
-          console.log('✅ TTS生成成功:', ttsResult.audio_path)
-        } else {
-          console.log('❌ TTS生成失败')
-        }
-        
-      } else {
-        console.log('❌ 视频生成失败:')
-        console.log('❌ 错误信息:', result.error)
-      }
-    } else {
-      console.log('❌ Manim API调用失败:')
-      console.log('❌ 状态码:', response.status)
-      const errorText = await response.text()
-      console.log('❌ 错误响应:', errorText)
+      // 2. 分析脚本质量
+      console.log('📊 分析脚本质量...')
+      const quality = analyzeScriptQuality(script)
+      
+      // 3. 检查是否包含具体步骤
+      console.log('🔍 检查解题步骤...')
+      const steps = extractSteps(script)
+      
+      // 4. 输出结果
+      console.log('✅ 脚本生成成功!')
+      console.log('📊 质量指标:', quality)
+      console.log('📋 包含步骤数:', steps.length)
+      console.log('📝 步骤列表:', steps.map((step, idx) => `${idx + 1}. ${step}`).join('\n'))
+      
+      // 5. 保存脚本到文件
+      const filename = `test_script_${i + 1}_${Date.now()}.py`
+      const fs = await import('fs')
+      fs.writeFileSync(filename, script)
+      console.log('💾 脚本已保存到:', filename)
+      
+    } catch (error) {
+      console.error(`❌ 问题 ${i + 1} 处理失败:`, error.message)
     }
     
-  } catch (error) {
-    console.log('❌ 请求异常:', error.message)
+    // 添加延迟避免API限制
+    if (i < testQuestions.length - 1) {
+      console.log('⏳ 等待3秒...')
+      await new Promise(resolve => setTimeout(resolve, 3000))
+    }
   }
+  
+  console.log('\n🎉 完整测试完成!')
+}
+
+function analyzeScriptQuality(script) {
+  const checks = {
+    hasImports: script.includes('from manim import'),
+    hasConfig: script.includes('config.frame_rate') || script.includes('config.pixel_height'),
+    hasClass: /class\s+\w+Scene\s*\(\s*Scene\s*\)/.test(script),
+    hasConstruct: script.includes('def construct(self):'),
+    hasTriangle: script.includes('Triangle') || script.includes('triangle'),
+    hasCalculation: script.includes('Tex(') || script.includes('MathTex('),
+    hasSteps: /步骤\d+/.test(script) || /Step\s*\d+/.test(script),
+    hasFormula: script.includes('\\frac') || script.includes('\\times') || script.includes('='),
+    isDetailed: script.length > 1000,
+    hasGeometry: script.includes('Triangle') || script.includes('Circle') || script.includes('Rectangle')
+  }
+  
+  const passed = Object.values(checks).filter(Boolean).length
+  const total = Object.keys(checks).length
+  
+  return {
+    score: `${passed}/${total}`,
+    percentage: Math.round((passed / total) * 100),
+    details: checks
+  }
+}
+
+function extractSteps(script) {
+  const stepPatterns = [
+    /步骤\s*(\d+)[：:]\s*([^\n]+)/g,
+    /Step\s*(\d+)[：:]\s*([^\n]+)/g,
+    /#\s*步骤\s*(\d+)[：:]\s*([^\n]+)/g
+  ]
+  
+  const steps = []
+  
+  stepPatterns.forEach(pattern => {
+    let match
+    while ((match = pattern.exec(script)) !== null) {
+      steps.push(match[2].trim())
+    }
+  })
+  
+  return steps
 }
 
 // 运行测试

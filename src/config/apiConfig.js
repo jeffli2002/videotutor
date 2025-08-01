@@ -8,34 +8,39 @@ export const API_BASE_URL = config.apiBaseUrl;
 export const QWEN_API_URL = 'http://localhost:8002/api/qwen'; // 使用增强服务器
 export const QWEN_API_KEY = import.meta.env.VITE_QWEN_API_KEY || '';
 
+// 代理服务器配置
+export const KIMI_PROXY_URL = 'http://localhost:3001';
+export const TTS_PROXY_URL = 'http://localhost:3002';
+export const MANIM_PROXY_URL = 'http://localhost:5006';
+
 // 环境变量配置模板
 export const API_CONFIG = {
   // 必需的API密钥 - 请在.env文件中配置
   REQUIRED_APIS: {
     // OpenAI API - 用于英文数学问题理解
-    OPENAI_API_KEY: process.env.REACT_APP_OPENAI_API_KEY,
+    OPENAI_API_KEY: import.meta.env.VITE_OPENAI_API_KEY,
     
     // 阿里云通义千问 - 用于中文数学问题理解 (性价比最高)
-    QWEN_API_KEY: process.env.REACT_APP_QWEN_API_KEY,
+    QWEN_API_KEY: import.meta.env.VITE_QWEN_API_KEY,
     
     // Azure Speech Services - 用于多语言TTS
-    AZURE_SPEECH_KEY: process.env.REACT_APP_AZURE_SPEECH_KEY,
-    AZURE_REGION: process.env.REACT_APP_AZURE_REGION,
+    AZURE_SPEECH_KEY: import.meta.env.VITE_AZURE_SPEECH_KEY,
+    AZURE_REGION: import.meta.env.VITE_AZURE_REGION,
     
     // D-ID API - 用于虚拟讲师视频生成
-    DID_API_KEY: process.env.REACT_APP_DID_API_KEY,
+    DID_API_KEY: import.meta.env.VITE_DID_API_KEY,
   },
   
   // 可选的API服务
   OPTIONAL_APIS: {
     // HeyGen API - D-ID的替代方案
-    HEYGEN_API_KEY: process.env.REACT_APP_HEYGEN_API_KEY,
+    HEYGEN_API_KEY: import.meta.env.VITE_HEYGEN_API_KEY,
     
     // Synthesia API - 另一个视频生成选项
-    SYNTHESIA_API_KEY: process.env.REACT_APP_SYNTHESIA_API_KEY,
+    SYNTHESIA_API_KEY: import.meta.env.VITE_SYNTHESIA_API_KEY,
     
     // Google Cloud Speech - Azure TTS的替代方案
-    GOOGLE_CLOUD_KEY: process.env.REACT_APP_GOOGLE_CLOUD_KEY,
+    GOOGLE_CLOUD_KEY: import.meta.env.VITE_GOOGLE_CLOUD_KEY,
   }
 }
 

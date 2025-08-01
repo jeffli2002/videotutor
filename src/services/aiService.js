@@ -1,6 +1,6 @@
 export class AIService {
   constructor() {
-    this.apiEndpoint = process.env.REACT_APP_AI_API_ENDPOINT || 'http://localhost:3001/api'
+    this.apiEndpoint = import.meta.env.VITE_AI_API_ENDPOINT || 'http://localhost:3001/api'
     this.models = {
       textProcessor: 'gpt-3.5-turbo',
       mathSolver: 'custom-math-model',

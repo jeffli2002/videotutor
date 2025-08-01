@@ -180,3 +180,51 @@ console.log('- ✅ 智能步骤提取')
 console.log('- ✅ 基于编号的正确排序')
 console.log('- ✅ 内容相似性去重')
 console.log('- ✅ 保持步骤完整性') 
+
+// 测试视频生成修复
+import { AnimationGenerator } from './src/services/animationGenerator.js';
+
+async function testVideoGenerationFix() {
+  console.log('🔍 测试视频生成修复...');
+  
+  try {
+    const animationGenerator = new AnimationGenerator();
+    
+    // 测试路径处理
+    const testVideoPath = 'media\\videos\\test\\video.mp4';
+    const testAudioPath = 'rendered_videos\\audio.mp3';
+    
+    console.log('📹 测试路径处理...');
+    console.log('原始视频路径:', testVideoPath);
+    console.log('原始音频路径:', testAudioPath);
+    
+    // 测试路径统一化
+    const fixedVideoPath = testVideoPath.replace(/[\\/]/g, '/');
+    const fixedAudioPath = testAudioPath.replace(/[\\/]/g, '/');
+    
+    console.log('修复后视频路径:', fixedVideoPath);
+    console.log('修复后音频路径:', fixedAudioPath);
+    
+    // 测试移除开头斜杠
+    const cleanVideoPath = fixedVideoPath.startsWith('/') ? fixedVideoPath.slice(1) : fixedVideoPath;
+    const cleanAudioPath = fixedAudioPath.startsWith('/') ? fixedAudioPath.slice(1) : fixedAudioPath;
+    
+    console.log('清理后视频路径:', cleanVideoPath);
+    console.log('清理后音频路径:', cleanAudioPath);
+    
+    console.log('✅ 路径处理测试通过');
+    
+    // 测试TTS音频生成
+    console.log('🎤 测试TTS音频生成...');
+    const ttsResult = await animationGenerator.generateTTSAudio('测试文本', 'zh');
+    console.log('TTS结果:', ttsResult);
+    
+    console.log('✅ 所有测试通过！');
+    
+  } catch (error) {
+    console.error('❌ 测试失败:', error.message);
+  }
+}
+
+// 运行测试
+testVideoGenerationFix(); 

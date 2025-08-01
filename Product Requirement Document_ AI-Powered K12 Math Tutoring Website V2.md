@@ -502,6 +502,116 @@ Success will depend on continuous innovation in AI capabilities, maintaining hig
 
 To efficiently store and manage the AI-generated video explanations, a robust and cost-effective cloud storage solution is required. Supabase Storage, an open-source, S3-compatible object storage service, is proposed as the primary solution due to its scalability, ease of integration with Supabase databases (for metadata), and transparent pricing.
 
+## 19. English Language Support and Internationalization
+
+### 19.1. Language Detection and Output Requirements
+
+**Primary Language Support:** The platform must provide comprehensive English language support as the default interface language for all users.
+
+**Auto-Detection Features:**
+- **Input Language Detection:** The system shall automatically detect the language of the user's input prompt (text, image, or voice)
+- **Output Language Matching:** The AI-generated output (both text scripts and video content) shall be produced in the same language as the detected input prompt
+- **Fallback Mechanism:** When language detection is uncertain, the system shall default to English
+
+### 19.2. UI Localization Requirements
+
+**Default Interface Language:** All user interface elements, navigation, buttons, labels, and system messages shall be displayed in English by default.
+
+**Language-Specific Components:**
+- **Navigation Elements:** All menu items, buttons, and navigation labels in English
+- **Form Labels:** Input field labels, placeholders, and validation messages in English
+- **System Messages:** Error messages, loading indicators, and success notifications in English
+- **Educational Content Labels:** Video titles, descriptions, and topic categories in English
+
+### 19.3. Chatbot-Style Interface Design
+
+**Conversational UI Pattern:** The platform shall adopt a chatbot-style interface design for improved user experience:
+
+**Input Interface:**
+- **Chat Input Area:** A prominent text input field at the bottom of the screen for users to type their math questions
+- **Quick Action Buttons:** Pre-defined math topic buttons ("Solve Equation", "Geometry Help", "Word Problems", etc.) for faster navigation
+- **Upload Integration:** Drag-and-drop and click-to-upload functionality for image input integrated into the chat interface
+- **Voice Input Button:** Microphone button integrated into the chat input area for voice queries
+
+**Output Display:**
+- **Conversation Thread:** AI responses appear as chat bubbles in a continuous conversation thread
+- **Step-by-Step Display:** Mathematical solutions presented as numbered steps within the chat flow
+- **Video Embeds:** Generated videos appear as playable thumbnails within the conversation
+- **Interactive Elements:** Users can ask follow-up questions to continue the conversation
+
+**Visual Design:**
+- **Clean Chat Interface:** Minimal distraction design focusing on the conversation
+- **Typing Indicators:** Show when AI is processing/generating content
+- **Message Status:** Display delivery and read receipts for generated content
+- **Responsive Layout:** Optimized for both desktop and mobile chat experiences
+
+### 19.4. Multi-Language TTS Support
+
+**Text-to-Speech Capabilities:**
+- **English TTS:** High-quality neural voice synthesis for English content
+- **Accent Options:** Support for American, British, and other English accent variations
+- **Math Terminology:** Accurate pronunciation of mathematical terms and symbols
+- **Speed Control:** Adjustable playback speed for user preference
+- **Voice Gender Options:** Male and female voice options for personalization
+
+**Language Detection for TTS:**
+- **Automatic Language Selection:** TTS language automatically matches the detected input language
+- **Cross-Language Support:** Seamless switching between English and other detected languages
+- **Fallback Voice:** Default to English neural voice when target language TTS is unavailable
+
+### 19.5. Content Generation Language Strategy
+
+**AI Response Generation:**
+- **Context-Aware Language:** All AI-generated explanations, step-by-step solutions, and video scripts produced in the detected input language
+- **Cultural Sensitivity:** Mathematical examples and contexts appropriate for English-speaking audiences
+- **Educational Standards:** Content aligned with US Common Core and other English-speaking curriculum standards
+- **Age-Appropriate Language:** Vocabulary and complexity level adjusted for K12 English-speaking students
+
+**Quality Assurance:**
+- **Language Validation:** Automated checks to ensure generated content matches target language
+- **Grammar Accuracy:** English grammar and syntax validation for all text outputs
+- **Terminology Consistency:** Standardized mathematical terminology across all English content
+
+### 19.6. Technical Implementation Requirements
+
+**Language Detection API:**
+- **Real-time Detection:** Fast language identification with <100ms response time
+- **Multi-modal Support:** Language detection for text, OCR-extracted text, and voice-to-text input
+- **Confidence Scoring:** Return confidence levels for language detection accuracy
+- **API Integration:** Seamless integration with existing QWEN API and TTS services
+
+**Content Pipeline:**
+- **Language Tagging:** All generated content tagged with language metadata
+- **Storage Organization:** Separate storage paths for different language content
+- **Cache Strategy:** Language-specific caching for improved performance
+- **Fallback Handling:** Graceful degradation to English when language services fail
+
+### 19.7. User Experience Enhancements
+
+**Language Settings:**
+- **Auto-Detection Toggle:** User option to enable/disable automatic language detection
+- **Manual Override:** Allow users to manually select output language preference
+- **Language Indicators:** Visual indicators showing detected language for each interaction
+- **Preference Storage:** Save user language preferences for future sessions
+
+**Accessibility Features:**
+- **Screen Reader Support:** Full compatibility with English screen readers
+- **Keyboard Navigation:** Complete keyboard accessibility for chat interface
+- **High Contrast Mode:** Support for users with visual impairments
+- **Font Size Options:** Adjustable text size for readability
+
+## 20. Future Language Expansion
+
+**Phase 1 Additional Languages:**
+- Spanish language support with regional variations
+- French language support with Canadian and European variants
+- Mandarin Chinese support with simplified/traditional character options
+
+**Phase 2 Global Expansion:**
+- German, Japanese, Korean, and Portuguese language support
+- RTL (Right-to-Left) language support for Arabic and Hebrew
+- Regional curriculum alignment for international markets
+
 ### 18.1. Supabase Storage Overview
 
 Supabase Storage allows for the storage of various file types, including images, documents, and crucially, video files. It offers:

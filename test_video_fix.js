@@ -1,5 +1,5 @@
 // 测试视频生成修复效果
-import { generateManimVideoFromQwen, buildManimScriptFromQwen } from './src/services/mathVideoAI.js'
+import { MathVideoAIService } from './src/services/mathVideoAI.js'
 
 // 测试用例1：包含重复步骤的AI响应
 const testAIResponseWithDuplicates = `**详细解题步骤**
@@ -93,6 +93,8 @@ x > 7
 async function testVideoGenerationFix() {
   console.log('🧪 开始测试视频生成修复效果...\n')
   
+  const service = new MathVideoAIService()
+  
   const testCases = [
     { name: '重复步骤测试', content: testAIResponseWithDuplicates },
     { name: '顺序混乱测试', content: testAIResponseWithWrongOrder },
@@ -104,16 +106,21 @@ async function testVideoGenerationFix() {
     console.log('=' * 50)
     
     try {
-      // 测试步骤提取
-      console.log('🔍 测试步骤提取...')
-      const manimScript = buildManimScriptFromQwen(testCase.content)
-      console.log('✅ Manim脚本生成成功')
-      console.log(`📝 脚本长度: ${manimScript.length} 字符`)
+      // 测试问题类型分析
+      console.log('🔍 测试问题类型分析...')
+      const analysis = service.analyzeQuestionType('解不等式 3x - 7 > 14')
+      console.log('✅ 问题类型分析成功:', analysis)
       
       // 测试视频生成（不实际渲染）
       console.log('🎬 测试视频生成流程...')
-      const videoResult = await generateManimVideoFromQwen(testCase.content, `test_${Date.now()}`)
+      const videoResult = await service.generateMathVideo('解不等式 3x - 7 > 14', testCase.content, 'zh')
       console.log('✅ 视频生成流程测试成功')
+      console.log('📊 结果:', {
+        type: videoResult.type,
+        success: videoResult.success,
+        duration: videoResult.totalDuration,
+        animations: videoResult.animations?.length || 0
+      })
       
       console.log('\n')
     } catch (error) {

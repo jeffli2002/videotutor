@@ -1,0 +1,36 @@
+#!/bin/bash
+# FFmpeg wrapper script to use Windows ffmpeg from WSL
+# This wrapper converts relative and absolute paths appropriately
+
+# Get the directory where this script is located (project root)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Convert paths for Windows ffmpeg
+args=()
+for arg in "$@"; do
+    if [[ -f "$arg" || -d "$arg" ]]; then
+        # It's a file or directory path
+        if [[ "$arg" == /* ]]; then
+            # Absolute path
+            if [[ "$arg" == /mnt/* ]]; then
+                # Already a WSL mount path, convert to Windows
+                winpath=$(echo "$arg" | sed 's|/mnt/\([a-z]\)/|\1:/|' | sed 's|/|\\|g')
+            else
+                # Other absolute path, convert to full path first
+                fullpath=$(realpath "$arg")
+                winpath=$(echo "$fullpath" | sed 's|/mnt/\([a-z]\)/|\1:/|' | sed 's|/|\\|g')
+            fi
+        else
+            # Relative path - convert to absolute then to Windows
+            fullpath=$(realpath "$arg" 2>/dev/null || echo "$SCRIPT_DIR/$arg")
+            winpath=$(echo "$fullpath" | sed 's|/mnt/\([a-z]\)/|\1:/|' | sed 's|/|\\|g')
+        fi
+        args+=("$winpath")
+    else
+        # Not a file path, pass as-is
+        args+=("$arg")
+    fi
+done
+
+# Call Windows ffmpeg with converted paths
+"/mnt/c/Program Files (x86)/ffmpeg/bin/ffmpeg.exe" "${args[@]}"

@@ -1,241 +1,168 @@
 // TTS服务模块 - 根据问题类型生成不同的语音内容
-import { QuestionAnalyzer } from './questionAnalyzer.js'
+import { getConfig } from '../config/environment.js'
 
 export class TTSService {
   constructor() {
-    this.questionAnalyzer = new QuestionAnalyzer()
-    this.config = {
-      tts: {
-        endpoint: 'http://localhost:8003/api/tts'
-      }
-    }
+    // Use kimi_api_server for TTS (port 3001)
+    this.baseURL = getConfig().apiBaseUrl || 'http://localhost:3001'
   }
 
-  // 根据问题类型生成相应的TTS内容
-  async generateVoiceover(question, solution, script, language = 'zh') {
-    const analysis = this.questionAnalyzer.analyzeQuestionType(question)
-    
-    if (analysis.isConcreteProblem) {
-      return this.generateConcreteProblemVoiceover(question, solution, script, language, analysis)
-    } else if (analysis.isTheoreticalQuestion) {
-      return this.generateTheoreticalQuestionVoiceover(question, solution, script, language, analysis)
-    } else {
-      return this.generateMixedVoiceover(question, solution, script, language, analysis)
-    }
-  }
-
-  // 生成具体求解问题的语音
-  async generateConcreteProblemVoiceover(question, solution, script, language, analysis) {
-    console.log('🎤 生成具体求解问题语音...')
-    
+  // 生成TTS音频
+  async generateTTSAudio(text, language = 'zh', method = 'auto') {
     try {
-      // 构建语音脚本
-      const voiceScript = this.buildConcreteProblemVoiceScript(script, language)
-      
-      // 调用TTS服务
-      const response = await fetch(this.config.tts.endpoint, {
+      console.log('🎤 生成TTS音频...')
+      console.log('📝 文本:', text.substring(0, 100) + '...')
+      console.log('🌍 语言:', language)
+      console.log('🔧 方法:', method)
+
+      const response = await fetch(`${this.baseURL}/api/tts`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          text: voiceScript,
-          language: language,
-          voice: language === 'zh' ? 'zh-CN-XiaoxiaoNeural' : 'en-US-AriaNeural',
-          speed: 0.9,
-          pitch: 0,
-          volume: 1.0
+          text,
+          language,
+          method
         })
       })
-      
+
+      if (!response.ok) {
+        throw new Error(`TTS请求失败: ${response.status} ${response.statusText}`)
+      }
+
       const result = await response.json()
       
-      if (result.success && result.audio_path) {
-        console.log('✅ 具体问题语音生成成功:', result.audio_path)
-        return {
-          audioPath: result.audio_path,
-          duration: this.calculateAudioDuration(voiceScript, language),
-          script: voiceScript,
-          type: 'concrete_problem'
-        }
+      if (result.success) {
+        console.log('✅ TTS音频生成成功:', result.audio_path)
+        return result
       } else {
-        console.warn('❌ 具体问题语音生成失败:', result.error)
-        return this.generateFallbackVoiceover(script, language)
+        throw new Error(result.error || 'TTS生成失败')
       }
-      
     } catch (error) {
-      console.error('❌ 具体问题语音生成异常:', error)
-      return this.generateFallbackVoiceover(script, language)
+      console.error('❌ TTS音频生成异常:', error)
+      throw error
     }
   }
 
-  // 生成理论解释问题的语音
-  async generateTheoreticalQuestionVoiceover(question, solution, script, language, analysis) {
-    console.log('🎤 生成理论解释问题语音...')
+  // 生成理论问题TTS内容
+  generateTheoreticalTTSContent(question, concepts = []) {
+    console.log('🎤 生成理论问题TTS内容...')
     
-    try {
-      // 构建语音脚本
-      const voiceScript = this.buildTheoreticalQuestionVoiceScript(script, language)
-      
-      // 调用TTS服务
-      const response = await fetch(this.config.tts.endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          text: voiceScript,
-          language: language,
-          voice: language === 'zh' ? 'zh-CN-XiaoxiaoNeural' : 'en-US-AriaNeural',
-          speed: 0.85, // 理论解释稍微慢一点
-          pitch: 0,
-          volume: 1.0
-        })
+    let content = `让我们来学习${concepts.join('、')}。今天我们要探讨的问题是：${question}。`
+    
+    if (concepts.length > 0) {
+      content += `通过这个动画演示，我们可以直观地看到这些原理是如何在几何图形中体现的。`
+    }
+    
+    content += `接下来，**问题分析**
+题目要求我们${question}。这是一个理论性的问题，需要我们从概念和原理的角度来理解。
+
+**核心概念**
+${concepts.map(concept => `- ${concept}`).join('\n')}
+
+**解题思路**
+1. 理解基本概念和定义
+2. 分析问题的关键要素
+3. 运用相关原理和公式
+4. 通过动画演示加深理解
+
+**总结**
+通过这个动画演示，我们深入理解了${concepts.join('、')}的核心原理。这种可视化学习方式帮助我们更好地掌握数学概念。`
+
+    console.log('✅ TTS内容生成完成:', content.substring(0, 100) + '...')
+    return content
+  }
+
+  // 生成具体问题TTS内容
+  generateConcreteTTSContent(question, solution, steps = []) {
+    console.log('🎤 生成具体问题TTS内容...')
+    
+    let content = `让我们来解决这个数学问题：${question}。`
+    
+    // 根据具体步骤生成内容
+    if (steps.length > 0) {
+      content += `\n\n**解题步骤**\n`
+      steps.forEach((step, index) => {
+        content += `${index + 1}. ${step}\n`
       })
-      
-      const result = await response.json()
-      
-      if (result.success && result.audio_path) {
-        console.log('✅ 理论问题语音生成成功:', result.audio_path)
-        return {
-          audioPath: result.audio_path,
-          duration: this.calculateAudioDuration(voiceScript, language),
-          script: voiceScript,
-          type: 'theoretical_question'
+    }
+    
+    if (solution) {
+      content += `\n**解答过程**\n${solution}`
+    }
+    
+    content += `\n\n让我们验证一下答案的正确性。通过这个动画演示，我们可以清楚地看到每一步的计算过程和逻辑推理。`
+    
+    console.log('✅ TTS内容生成完成:', content.substring(0, 100) + '...')
+    return content
+  }
+
+  // 生成几何问题TTS内容
+  generateGeometryTTSContent(question, geometryInfo = {}) {
+    console.log('🎤 生成几何问题TTS内容...')
+    
+    let content = `让我们来解决这个几何问题：${question}。`
+    
+    if (geometryInfo.shapes) {
+      content += `\n\n**几何图形分析**\n`
+      geometryInfo.shapes.forEach(shape => {
+        content += `- ${shape}\n`
+      })
+    }
+    
+    if (geometryInfo.formulas) {
+      content += `\n**相关公式**\n`
+      geometryInfo.formulas.forEach(formula => {
+        content += `- ${formula}\n`
+      })
+    }
+    
+    content += `\n**解题思路**\n1. 识别几何图形和已知条件\n2. 应用相关公式和定理\n3. 逐步计算求解\n4. 验证答案的合理性\n\n通过这个动画演示，我们可以直观地看到几何图形的变化过程和计算步骤。`
+    
+    console.log('✅ TTS内容生成完成:', content.substring(0, 100) + '...')
+    return content
+  }
+
+  // 清理文本内容
+  cleanText(text) {
+    if (!text) return ''
+    
+    // 移除Markdown标记
+    let cleaned = text
+      .replace(/\*\*(.*?)\*\*/g, '$1') // 移除粗体
+      .replace(/\*(.*?)\*/g, '$1')     // 移除斜体
+      .replace(/`(.*?)`/g, '$1')       // 移除代码标记
+      .replace(/#{1,6}\s+/g, '')       // 移除标题标记
+      .replace(/\[(.*?)\]\(.*?\)/g, '$1') // 移除链接
+      .replace(/\n{3,}/g, '\n\n')      // 合并多个换行
+      .trim()
+    
+    return cleaned
+  }
+
+  // 从脚本生成语音内容
+  generateVoiceScriptFromScript(script) {
+    console.log('🎤 从脚本生成语音内容...')
+    
+    let voiceScript = ''
+    
+    if (script.pages && Array.isArray(script.pages)) {
+      script.pages.forEach((page, index) => {
+        if (page.content) {
+          const cleanedContent = this.cleanText(page.content)
+          if (cleanedContent) {
+            voiceScript += cleanedContent
+          }
         }
-      } else {
-        console.warn('❌ 理论问题语音生成失败:', result.error)
-        return this.generateFallbackVoiceover(script, language)
-      }
-      
-    } catch (error) {
-      console.error('❌ 理论问题语音生成异常:', error)
-      return this.generateFallbackVoiceover(script, language)
+        // 添加停顿
+        if (index < script.pages.length - 1) {
+          voiceScript += ' '
+        }
+      })
     }
-  }
-
-  // 生成混合类型问题的语音
-  async generateMixedVoiceover(question, solution, script, language, analysis) {
-    console.log('🎤 生成混合类型问题语音...')
     
-    // 根据问题内容动态选择语音类型
-    if (question.includes('拉窗帘') || question.includes('原理')) {
-      return this.generateTheoreticalQuestionVoiceover(question, solution, script, language, analysis)
-    } else {
-      return this.generateConcreteProblemVoiceover(question, solution, script, language, analysis)
-    }
-  }
-
-  // 构建具体问题的语音脚本
-  buildConcreteProblemVoiceScript(script, language) {
-    let voiceScript = ''
-    
-    script.pages.forEach((page, index) => {
-      if (index === 0) {
-        // 问题介绍
-        voiceScript += `${page.text}。`
-      } else if (index === script.pages.length - 1) {
-        // 验证总结
-        voiceScript += `${page.text}。`
-      } else {
-        // 解题步骤
-        voiceScript += `第${index}步，${page.text}。`
-      }
-      
-      // 添加停顿
-      if (index < script.pages.length - 1) {
-        voiceScript += ' '
-      }
-    })
-    
+    console.log('✅ 语音脚本生成完成，长度:', voiceScript.length)
     return voiceScript
-  }
-
-  // 构建理论问题的语音脚本
-  buildTheoreticalQuestionVoiceScript(script, language) {
-    let voiceScript = ''
-    
-    script.pages.forEach((page, index) => {
-      if (index === 0) {
-        // 概念介绍
-        voiceScript += `${page.text}。`
-      } else if (index === script.pages.length - 2) {
-        // 实例演示
-        voiceScript += `${page.text}。`
-      } else if (index === script.pages.length - 1) {
-        // 总结
-        voiceScript += `${page.text}。`
-      } else {
-        // 概念解释
-        voiceScript += `接下来，${page.text}。`
-      }
-      
-      // 添加停顿
-      if (index < script.pages.length - 1) {
-        voiceScript += ' '
-      }
-    })
-    
-    return voiceScript
-  }
-
-  // 计算音频时长
-  calculateAudioDuration(text, language) {
-    // 根据文本长度和语言估算时长
-    const wordsPerMinute = language === 'zh' ? 200 : 150
-    const words = text.split(/\s+/).length
-    const minutes = words / wordsPerMinute
-    return Math.ceil(minutes * 60) // 返回秒数
-  }
-
-  // 生成备用语音（当TTS服务失败时）
-  generateFallbackVoiceover(script, language) {
-    console.log('📊 生成备用语音...')
-    
-    const voiceScript = this.buildConcreteProblemVoiceScript(script, language)
-    
-    return {
-      audioPath: null,
-      duration: this.calculateAudioDuration(voiceScript, language),
-      script: voiceScript,
-      type: 'fallback'
-    }
-  }
-
-  // 处理数学术语
-  processMathTerms(text, language) {
-    if (language === 'zh') {
-      return text
-        .replace(/\*/g, '乘以')
-        .replace(/\//g, '除以')
-        .replace(/\+/g, '加')
-        .replace(/-/g, '减')
-        .replace(/=/g, '等于')
-        .replace(/\^/g, '的')
-        .replace(/sqrt/g, '根号')
-        .replace(/pi/g, 'π')
-    } else {
-      return text
-        .replace(/\*/g, ' times ')
-        .replace(/\//g, ' divided by ')
-        .replace(/\+/g, ' plus ')
-        .replace(/-/g, ' minus ')
-        .replace(/=/g, ' equals ')
-        .replace(/\^/g, ' to the power of ')
-        .replace(/sqrt/g, 'square root of ')
-    }
-  }
-
-  // 构建SSML脚本（用于更精细的语音控制）
-  buildSSMLScript(text, voice, language) {
-    const processedText = this.processMathTerms(text, language)
-    
-    return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${language === 'zh' ? 'zh-CN' : 'en-US'}">
-  <voice name="${voice}">
-    <prosody rate="0.9" pitch="0">
-      ${processedText}
-    </prosody>
-  </voice>
-</speak>`
   }
 } 

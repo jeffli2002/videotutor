@@ -43,12 +43,20 @@ export class ScriptGenerator {
 
     // 为每个具体步骤创建页面
     steps.forEach((step, index) => {
+      // Better duration estimation based on TTS speed
+      // Chinese: ~3-4 characters per second, English: ~2-3 words per second
+      const charCount = step.length
+      const estimatedDuration = language === 'zh' 
+        ? Math.max(5, Math.ceil(charCount / 3.5)) // Chinese characters
+        : Math.max(5, Math.ceil(charCount / 15)) // English (avg 5 chars per word, 3 words/sec)
+      
       script.pages.push({
         page: index + 2,
-        duration: Math.max(8, step.length * 0.3),
+        duration: estimatedDuration,
         text: step,
         subText: language === 'zh' ? `步骤 ${index + 1}` : `Step ${index + 1}`,
-        visual: `show_step_${index + 1}`
+        visual: `show_step_${index + 1}`,
+        estimatedTTSDuration: estimatedDuration
       })
     })
 
@@ -88,12 +96,19 @@ export class ScriptGenerator {
 
     // 为每个概念点创建页面
     concepts.forEach((concept, index) => {
+      // Better duration estimation for theoretical concepts (usually longer explanations)
+      const charCount = concept.length
+      const estimatedDuration = language === 'zh' 
+        ? Math.max(8, Math.ceil(charCount / 3.2)) // Slightly slower for concepts
+        : Math.max(8, Math.ceil(charCount / 12)) // English concepts need more time
+      
       script.pages.push({
         page: index + 2,
-        duration: Math.max(10, concept.length * 0.4),
+        duration: estimatedDuration,
         text: concept,
         subText: language === 'zh' ? `概念点 ${index + 1}` : `Concept ${index + 1}`,
-        visual: `explain_concept_${index + 1}`
+        visual: `explain_concept_${index + 1}`,
+        estimatedTTSDuration: estimatedDuration
       })
     })
 
@@ -144,30 +159,97 @@ export class ScriptGenerator {
     if (Array.isArray(solution)) {
       steps = solution
     } else if (typeof solution === 'string') {
-      // 从字符串中提取步骤
-      const stepMatches = solution.match(/(\d+)[.、\)]\s*\*\*([^*]+)\*\*\s*([^\n]+)/g)
-      if (stepMatches) {
+      // 优先从"详细解题步骤"块中提取
+      const detailMatch = solution.match(/\*\*详细解题步骤\*\*([\s\S]*?)(\n\s*\*\*|---|$)/);
+      if (detailMatch) {
+        const stepsBlock = detailMatch[1];
+        // 用正则提取每个编号大步（支持1.、2.、3.等Markdown格式）
+        const stepMatches = [...stepsBlock.matchAll(/(\d+)\.\s*\*\*([^*]+)\*\*([\s\S]*?)(?=\n\d+\.\s*\*\*|$)/g)];
+        
         steps = stepMatches.map(match => {
-          const content = match.replace(/^\d+[.、\)]\s*\*\*([^*]+)\*\*\s*/, '$1：')
-          return content.trim()
-        })
+          const stepNum = match[1];
+          const title = match[2].trim();
+          const content = match[3].trim();
+          
+          // 清理内容中的多余格式和LaTeX符号
+          const cleanContent = content
+            .replace(/^\s*[\-\*]\s*/gm, '') // 去除列表符号
+            .replace(/\n{2,}/g, '\n') // 多换行合一
+            .replace(/解释：/g, '') // 去除"解释："前缀
+            .replace(/中间结果：/g, '') // 去除"中间结果："前缀
+            .replace(/\$\$?/g, '') // 移除LaTeX定界符
+            .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '$1除以$2') // 转换分数
+            .replace(/\\[a-zA-Z]+/g, '') // 移除LaTeX命令
+            .replace(/[\^\{\}\\]/g, '') // 移除特殊字符
+            .replace(/\*{2,}/g, '') // 移除markdown强调
+            .replace(/\s+/g, ' ') // 规范化空格
+            .trim();
+          
+          return `${title} ${cleanContent}`;
+        });
       } else {
-        // 尝试其他格式
-        const lines = solution.split('\n').filter(line => 
-          line.trim().length > 10 && 
-          /[\+\-\=\×\÷\√\d]/.test(line) &&
-          !line.includes('**最终答案') &&
-          !line.includes('**验证')
-        )
-        steps = lines.slice(0, 6)
+        // 备用提取方法：智能提取步骤
+        const lines = solution.split('\n');
+        const stepPatterns = [
+          /^(步骤|Step)\s*\d+[:：\s]/i,
+          /^(\d+)[.、\)]\s*([^：]+)/,
+          /^\*\*(.+?)\*\*/,
+          /^(计算|操作|解释|验证)[:：\s]/
+        ];
+        
+        let currentStep = '';
+        let stepNumber = 1;
+        
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed === '' || trimmed.match(/^[-*_]{3,}$/)) continue;
+          
+          const isStepStart = stepPatterns.some(pattern => pattern.test(trimmed));
+          
+          if (isStepStart) {
+            if (currentStep && !currentStep.includes('最终答案') && !currentStep.includes('验证')) {
+              const cleaned = this.cleanStepContent(currentStep);
+              if (cleaned && !steps.includes(cleaned)) {
+                steps.push(cleaned);
+              }
+            }
+            currentStep = trimmed;
+            stepNumber++;
+          } else if (currentStep && !trimmed.includes('最终答案') && !trimmed.includes('验证')) {
+            currentStep += ' ' + trimmed;
+          }
+        }
+        
+        if (currentStep && !currentStep.includes('最终答案') && !currentStep.includes('验证')) {
+          const cleaned = this.cleanStepContent(currentStep);
+          if (cleaned && !steps.includes(cleaned)) {
+            steps.push(cleaned);
+          }
+        }
       }
     }
     
-    // 确保步骤是具体的数学操作
-    return steps.filter(step => 
-      step.length > 10 && 
-      (/\d/.test(step) || /[\+\-\=\×\÷\√]/.test(step) || /(计算|求解|化简|展开|合并|移项|代入)/.test(step))
-    )
+    // 清理和去重步骤
+    const cleanSteps = steps.map(step => this.cleanStepContent(step))
+    const uniqueSteps = [...new Set(cleanSteps.filter(step => step.length > 10))]
+    return uniqueSteps.slice(0, 6)
+  }
+
+  // 清理单个步骤内容
+  cleanStepContent(step) {
+    return step
+      .replace(/^题目[:：]/g, '')
+      .replace(/^\d+[.、\)]\s*/g, '')
+      .replace(/^\*\*/g, '')
+      .replace(/\*\*$/g, '')
+      .replace(/\${2,}/g, '')
+      .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '$1除以$2')
+      .replace(/\\[a-zA-Z]+/g, '')
+      .replace(/[\^\{\}\\]/g, '')
+      .replace(/\*{2,}/g, '')
+      .replace(/\s+/g, ' ')
+      .replace(/^(步骤|Step)\s*\d+[:：\s]*/i, '')
+      .trim();
   }
 
   // 提取理论概念

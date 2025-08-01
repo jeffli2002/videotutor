@@ -1,5 +1,8 @@
 // 环境配置
 const getEnvironment = () => {
+  if (typeof window === 'undefined') {
+    return 'local';
+  }
   const hostname = window.location.hostname;
   
   if (hostname.includes('github.io')) {
@@ -23,8 +26,10 @@ const config = {
     environment: 'production'
   },
   'local': {
-    apiBaseUrl: 'http://localhost:5001',
+    apiBaseUrl: 'http://localhost:3001',
     qwenApiUrl: 'http://localhost:8002',
+    ttsApiUrl: 'http://localhost:3002',
+    manimApiUrl: 'http://localhost:3000',
     environment: 'development'
   }
 };

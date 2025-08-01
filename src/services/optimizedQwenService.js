@@ -3,8 +3,8 @@ import { selectOptimalQwenModel } from '../config/qwenModelSelection.js'
 // 优化后的通义千问API调用服务
 export class OptimizedQwenService {
   constructor() {
-    this.apiKey = process.env.REACT_APP_QWEN_API_KEY
-    this.baseUrl = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation'
+    this.apiKey = import.meta.env.VITE_KIMI_API_KEY || 'test-key-for-development'
+    this.baseUrl = 'http://localhost:3001/api/kimi/chat'
     this.cache = new Map() // 简单内存缓存
     this.requestCount = 0
     this.dailyBudget = 200 // ¥200每日预算
@@ -159,74 +159,49 @@ ${gradeContext}${difficultyHint}
   }
 
   async callQwenAPI(prompt, modelType) {
-    const modelConfigs = {
-      'qwen-turbo': {
-        model: 'qwen-turbo',
-        temperature: 0.1,
-        max_tokens: 1500
-      },
-      'qwen-plus': {
-        model: 'qwen-plus', 
-        temperature: 0.1,
-        max_tokens: 2000
-      },
-      'qwen-math-plus': {
-        model: 'qwen-math-plus',
-        temperature: 0.05,
-        max_tokens: 3000
-      }
+    // KIMI模型名
+    const kimiModel = 'moonshot-v1-8k'
+    const config = {
+      model: kimiModel,
+      temperature: 0.1,
+      max_tokens: 2048,
+      top_p: 0.8
     }
-
-    const config = modelConfigs[modelType] || modelConfigs['qwen-plus']
-
+    const messages = [
+      {
+        role: 'system',
+        content: '你是专业的数学教师，专注于K12数学教育。请确保答案准确、解释清晰、适合学生理解。'
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ]
     const response = await fetch(this.baseUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
+        messages,
         model: config.model,
-        input: {
-          messages: [
-            {
-              role: 'system',
-              content: '你是专业的数学教师，专注于K12数学教育。请确保答案准确、解释清晰、适合学生理解。'
-            },
-            {
-              role: 'user', 
-              content: prompt
-            }
-          ]
-        },
-        parameters: {
-          temperature: config.temperature,
-          max_tokens: config.max_tokens,
-          top_p: 0.8,
-          repetition_penalty: 1.1
-        }
+        max_tokens: config.max_tokens,
+        temperature: config.temperature,
+        top_p: config.top_p
       })
     })
-
     if (!response.ok) {
-      throw new Error(`API调用失败: ${response.status} ${response.statusText}`)
+      throw new Error(`KIMI API调用失败: ${response.status} ${response.statusText}`)
     }
-
     const data = await response.json()
-    
-    if (data.code && data.code !== '200') {
-      throw new Error(`API返回错误: ${data.message}`)
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error('KIMI API返回格式错误')
     }
-
-    try {
-      return JSON.parse(data.output.text)
-    } catch (parseError) {
-      // 如果返回的不是有效JSON，包装成标准格式
-      return {
-        rawResponse: data.output.text,
-        parsed: false,
-        fallbackAnswer: data.output.text
-      }
+    return {
+      content: data.choices[0].message.content,
+      usage: data.usage,
+      model: data.model,
+      requestId: data.id
     }
   }
 
