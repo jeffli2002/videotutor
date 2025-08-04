@@ -1,11 +1,20 @@
 // 动画生成模块 - 根据问题类型生成不同的动画内容
 console.log('🚀 AnimationGenerator.js loaded - VERSION 2024.01.31 with str.replace fix')
 import { QuestionAnalyzer } from './questionAnalyzer.js'
+import { ImprovedManimScriptGenerator } from './improvedManimScriptGenerator.js'
+import { AIDrivenManimGenerator } from './aiDrivenManimGenerator.js'
+import { SimplifiedManimGenerator } from './simplifiedManimGenerator.js'
+import { SubtitledManimGenerator } from './subtitledManimGenerator.js'
+import { TTSService } from './ttsService.js'
 import axios from 'axios';
 
 export class AnimationGenerator {
   constructor() {
     this.questionAnalyzer = new QuestionAnalyzer()
+    this.manimScriptGenerator = new ImprovedManimScriptGenerator()
+    this.aiManimGenerator = new AIDrivenManimGenerator()
+    this.simplifiedManimGenerator = new SimplifiedManimGenerator()
+    this.subtitledManimGenerator = new SubtitledManimGenerator()
     this.config = {
       manim: {
         endpoint: '/api/v2/manim/render'  // Use proxied path for real_manim_video_server_v2
@@ -220,6 +229,12 @@ export class AnimationGenerator {
     
     // 优先使用基于AI答案的独特动画生成
     console.log('🎯 为每个问题生成独特的AI动画内容...')
+    console.log('📝 输入参数:', {
+      question: question?.substring(0, 50) + '...',
+      solutionLength: solution?.length || 0,
+      scriptPages: script?.pages?.length || 0,
+      language
+    })
     
     try {
       // 为每个问题生成基于AI答案的独特内容
@@ -227,16 +242,24 @@ export class AnimationGenerator {
       
       if (uniqueContent && uniqueContent.length > 0) {
         console.log('✅ 成功生成基于AI答案的独特动画')
+        console.log('📊 动画详情:', {
+          type: uniqueContent[0].animationType,
+          videoPath: uniqueContent[0].videoPath,
+          hasAudio: uniqueContent[0].hasAudio,
+          generated: uniqueContent[0].generated
+        })
         return uniqueContent
       } else {
         console.warn('⚠️ 无法生成独特动画，使用回退方案')
-        return this.generateStaticVisuals(question, script)
+        console.log('❓ uniqueContent为空或长度为0')
+        return await this.generateStaticVisuals(question, script)
       }
       
     } catch (error) {
-      console.error('❌ 独特动画生成失败，使用回退:', error)
+      console.error('❌ 独特动画生成失败，使用回退:', error.message)
+      console.error('📋 错误堆栈:', error.stack)
       // 回退到静态内容，但会记录
-      return this.generateStaticVisuals(question, script)
+      return await this.generateStaticVisuals(question, script)
     }
   }
 
@@ -300,15 +323,19 @@ export class AnimationGenerator {
       try {
         const healthCheck = await fetch(this.config.manim.endpoint.replace('/render', '/health'), {
           method: 'GET',
-          signal: AbortSignal.timeout(2000) // 2秒超时
-        }).catch(() => null)
+          signal: AbortSignal.timeout(5000) // 增加到5秒超时
+        }).catch((err) => {
+          console.warn('⚠️ Manim健康检查请求失败:', err.message)
+          return null
+        })
         
         if (!healthCheck || !healthCheck.ok) {
           console.warn('⚠️ Manim服务器不可用，使用备用视频')
+          console.log('Health check response:', healthCheck?.status, healthCheck?.statusText)
           return this.generateStaticVisuals(question, script)
         }
       } catch (e) {
-        console.warn('⚠️ Manim服务器健康检查失败，使用备用视频')
+        console.warn('⚠️ Manim服务器健康检查失败，使用备用视频:', e.message)
         return this.generateStaticVisuals(question, script)
       }
       
@@ -400,6 +427,16 @@ export class AnimationGenerator {
   async generateUniqueAnimationFromAI(question, solution, script, language = 'zh') {
     console.log('🎬 为AI答案生成独特动画内容...')
     
+    // Validate inputs
+    if (!question) {
+      console.error('❌ No question provided to generateUniqueAnimationFromAI')
+      throw new Error('Question is required for animation generation')
+    }
+    
+    // Handle undefined solution and script gracefully
+    solution = solution || ''
+    script = script || { pages: [] }
+    
     // 为每个问题生成唯一的输出文件名
     const uniqueId = Date.now() + Math.floor(Math.random() * 1000)
     const outputName = `ai_solution_${uniqueId}`
@@ -428,8 +465,32 @@ export class AnimationGenerator {
         })
       }
       
-      // 基于AI答案构建独特的Manim脚本
-      const uniqueScript = this.buildUniqueManimScriptFromAI(finalSteps, concepts, script, question, solution)
+      // 先生成TTS内容以便用于字幕
+      let ttsContent = []
+      let cleanedTTSText = ''
+      
+      try {
+        const tts = new TTSService()
+        const questionType = this.questionAnalyzer.analyzeQuestionType(question)
+        
+        if (questionType.type === 'theoretical') {
+          ttsContent = [tts.generateTheoreticalTTSContent(question, solution, concepts)]
+        } else if (questionType.type === 'geometry') {
+          ttsContent = [tts.generateGeometryTTSContent(question, { shapes: concepts })]
+        } else {
+          ttsContent = [tts.generateConcreteTTSContent(question, solution, finalSteps)]
+        }
+        
+        // Clean TTS content for subtitles
+        cleanedTTSText = this.cleanTextForTTS(ttsContent.join(' '), language)
+        console.log('🧹 Prepared TTS content for subtitles')
+      } catch (ttsError) {
+        console.error('❌ 生成TTS内容时出错:', ttsError)
+        cleanedTTSText = this.cleanTextForTTS(`让我们来解决这个问题：${question}`, language)
+      }
+
+      // 基于AI答案构建独特的Manim脚本（带字幕）
+      const uniqueScript = await this.buildUniqueManimScriptFromAI(finalSteps, concepts, script, question, solution, cleanedTTSText)
       
       console.log('✅ 基于AI答案的独特脚本生成完成')
       
@@ -447,15 +508,26 @@ export class AnimationGenerator {
           : baseURL + this.config.manim.endpoint;
         
         console.log('📍 Full URL will be:', fullURL);
+        console.log('📜 Script being sent to Manim server:');
+        console.log('- Script length:', uniqueScript ? uniqueScript.length : 0);
+        console.log('- First 200 chars:', uniqueScript ? uniqueScript.substring(0, 200) : 'NO SCRIPT');
+        console.log('- Script type:', typeof uniqueScript);
+        console.log('- Is empty script for native:', uniqueScript === '');
         
-        const renderResponse = await axios.post(fullURL, {
-          script: uniqueScript,
+        // Add duration to the request
+        const requestData = {
+          script: uniqueScript || '',  // Ensure it's never null/undefined
           output_name: outputName,
           question: question,
-          solution: solution
-        }, {
+          solution: solution,
+          duration: 20  // Add duration parameter
+        };
+        
+        console.log('📦 Request data:', JSON.stringify(requestData, null, 2));
+        
+        const renderResponse = await axios.post(fullURL, requestData, {
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json; charset=utf-8'
           },
           timeout: 120000 // 120 second timeout for Manim rendering
         })
@@ -472,17 +544,27 @@ export class AnimationGenerator {
           throw new Error(`Manim渲染失败: HTTP ${renderResponse.status}`);
         }
       } catch (renderError) {
-        console.error('❌ Manim渲染请求失败:', renderError)
-        console.error('Error details:', {
-          message: renderError.message,
-          code: renderError.code,
-          response: renderError.response?.data,
-          status: renderError.response?.status,
-          config: {
-            url: renderError.config?.url,
-            method: renderError.config?.method,
-            data: renderError.config?.data ? JSON.parse(renderError.config.data) : null
-          }
+        console.error('❌ Manim渲染请求失败:', renderError.message)
+        
+        // More detailed error logging
+        if (renderError.response) {
+          console.error('📋 Response error details:', {
+            status: renderError.response.status,
+            statusText: renderError.response.statusText,
+            data: renderError.response.data,
+            headers: renderError.response.headers
+          })
+        } else if (renderError.request) {
+          console.error('📋 Request error (no response received):', renderError.request)
+        } else {
+          console.error('📋 Error setting up request:', renderError.message)
+        }
+        
+        console.error('📋 Request details:', {
+          url: renderError.config?.url,
+          method: renderError.config?.method,
+          data: renderError.config?.data ? JSON.parse(renderError.config.data) : null,
+          headers: renderError.config?.headers
         })
         
         // If it's a network error or timeout, try once more with a simpler script
@@ -521,15 +603,8 @@ export class AnimationGenerator {
         }
       }
       
-      // 生成独特的TTS内容
-      let ttsContent = []
-      try {
-        ttsContent = this.generateUniqueTTSFromAI(finalSteps, concepts, question, solution)
-        console.log('✅ TTS内容生成完成，长度:', ttsContent.length)
-      } catch (ttsError) {
-        console.error('❌ 生成TTS内容时出错:', ttsError)
-        ttsContent = [`让我们来解决这个问题：${question}`]
-      }
+      // TTS内容已经在前面生成并清理过了，直接使用
+      console.log('📢 使用之前准备的TTS内容生成音频')
       
       // 生成TTS音频
       console.log('🎤 生成TTS音频...')
@@ -537,7 +612,10 @@ export class AnimationGenerator {
       let hasAudio = false
       
       try {
-        const audioResult = await this.generateTTSAudio(ttsContent.join(' '), language)
+        // Use the already cleaned TTS text
+        console.log('🧹 Using pre-cleaned TTS text (first 100 chars):', cleanedTTSText.substring(0, 100));
+        
+        const audioResult = await this.generateTTSAudio(cleanedTTSText, language)
         if (audioResult.success) {
           audioPath = audioResult.audioPath
           hasAudio = true
@@ -586,14 +664,96 @@ export class AnimationGenerator {
     }
   }
 
+  // Simple fallback script that should always work
+  generateSimpleFallbackScript(question, solution, duration = 20) {
+    const questionText = question.substring(0, 50);
+    const solutionText = solution ? solution.substring(0, 100) : 'Solution';
+    
+    return `#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+from manim import *
+
+class MathSolution(Scene):
+    def construct(self):
+        # White background
+        self.camera.background_color = WHITE
+        
+        # Create subtitle area
+        subtitle_bg = Rectangle(
+            width=config.frame_width,
+            height=1.2,
+            fill_color=BLACK,
+            fill_opacity=0.7,
+            stroke_width=0
+        ).to_edge(DOWN, buff=0)
+        self.add(subtitle_bg)
+        
+        # Title
+        title = Text("${questionText}", font_size=36, color=BLUE, font="SimHei")
+        title.to_edge(UP)
+        
+        # Subtitle
+        subtitle = Text("${questionText}", font_size=20, color=WHITE, font="SimHei")
+        subtitle.move_to(subtitle_bg.get_center())
+        self.add(subtitle)
+        
+        self.play(Write(title))
+        self.wait(2)
+        
+        # Content
+        content = Text("${solutionText}", font_size=24, color=BLACK, font="SimHei")
+        content.next_to(title, DOWN, buff=1)
+        self.play(Write(content))
+        
+        self.wait(${duration - 3})`;
+  }
+
   // 基于AI答案构建独特的Manim脚本 - 使用瀑布式格式
-  buildUniqueManimScriptFromAI(steps, concepts, script, question, solution) {
+  async buildUniqueManimScriptFromAI(steps, concepts, script, question, solution, ttsContent = '') {
     console.log('📝 构建基于AI答案的瀑布式Manim脚本...')
     console.log('📊 步骤数量:', steps.length)
     console.log('📚 概念数量:', concepts.length)
+    console.log('🎤 TTS内容长度:', ttsContent.length)
     
-    // For now, use a simpler direct Manim script instead of complex waterfall
-    // Ensure steps are strings before passing to buildSimpleDirectManimScript
+    // Check if we should use native Manim generation for better problem-specific visualizations
+    const useNativeManim = this.shouldUseNativeManim(question, solution);
+    
+    if (useNativeManim) {
+      console.log('🎯 使用原生Manim生成器以获得更好的问题特定可视化');
+      // Return empty string to let the server generate its own script
+      return '';
+    }
+    
+    // Always use AI-driven generator which now has built-in subtitle support
+    try {
+      console.log('🤖 使用AI驱动的Manim生成器（含字幕功能）...');
+      const aiGeneratedScript = await this.aiManimGenerator.generateManimScript(question, solution, 20);
+      console.log('✅ 成功使用AI驱动的Manim脚本生成器创建了带字幕的动画');
+      return aiGeneratedScript;
+    } catch (aiError) {
+      console.error('❌ AI驱动的生成器失败:', aiError.message);
+      console.error('Stack:', aiError.stack);
+      
+      // Fallback to improved script generator as second choice
+      try {
+        console.log('⚠️ 尝试使用改进的脚本生成器作为备选...');
+        const improvedScript = this.manimScriptGenerator.generateQuestionSpecificScript(
+          question,
+          steps,
+          { shapes: concepts }
+        );
+        console.log('✅ 使用改进的脚本生成器创建了动画');
+        return improvedScript;
+      } catch (improvedError) {
+        console.error('❌ 改进的脚本生成器也失败了:', improvedError.message);
+        
+        // Simple fallback - basic script that should always work
+        console.log('⚠️ 使用简单的备用脚本...');
+        return this.generateSimpleFallbackScript(question, solution, 20);
+      }
+    }
+    
+    // For other problems, use a simpler direct Manim script
     const stringSteps = steps.map(step => {
       if (typeof step === 'string') {
         return step
@@ -1060,7 +1220,7 @@ config.output_file = "${outputName}"
       
       // 从解答中提取关键概念
       const solutionConcepts = [];
-      const lines = solution.split('\n');
+      const lines = solution ? solution.split('\n') : [];
       
       for (const line of lines) {
         const cleanLine = cleanText(line);
@@ -1590,6 +1750,216 @@ config.output_file = "generated_universal"
     return this.buildUniversalSceneScript(contents, scripts);
   }
 
+  // Build Manim script for equation solving
+  buildEquationSolvingManimScript(question, steps, solution) {
+    console.log('🔢 生成方程求解Manim脚本...')
+    
+    // Extract the equation from the question
+    const equationMatch = question.match(/([^：:]+[=][^。.]+)/) || question.match(/(\d+\s*[a-zA-Z]\s*[+\-*/]\s*\d+\s*=\s*\d+)/)
+    const equation = equationMatch ? equationMatch[1].trim() : '2x + 5 = 15'
+    
+    return `from manim import *
+
+class EquationSolving(Scene):
+    def construct(self):
+        self.camera.background_color = "#1a1a1a"
+        
+        # Title
+        title = Text("${question}", font="SimHei", font_size=32, color=BLUE)
+        title.to_edge(UP, buff=0.5)
+        self.play(Write(title))
+        self.wait(1)
+        
+        # Original equation
+        equation = MathTex("${equation}")
+        equation.scale(1.5)
+        equation.move_to(ORIGIN + UP)
+        self.play(Write(equation))
+        self.wait(2)
+        
+        # Step 1: Move constant to right side
+        step1_text = Text("Step 1: 移项", font="SimHei", font_size=24, color=YELLOW)
+        step1_text.next_to(equation, DOWN, buff=1)
+        self.play(FadeIn(step1_text))
+        self.wait(1)
+        
+        # For equation 2x + 5 = 15
+        if "2x" in "${equation}" and "+5" in "${equation}":
+            # Transform to 2x = 15 - 5
+            equation2 = MathTex("2x", "=", "15", "-", "5")
+            equation2.scale(1.5)
+            equation2.move_to(equation.get_center())
+            
+            self.play(
+                TransformMatchingTex(equation, equation2),
+                FadeOut(step1_text)
+            )
+            self.wait(2)
+            
+            # Simplify: 2x = 10
+            equation3 = MathTex("2x", "=", "10")
+            equation3.scale(1.5)
+            equation3.move_to(equation2.get_center())
+            
+            step2_text = Text("Step 2: 计算", font="SimHei", font_size=24, color=YELLOW)
+            step2_text.next_to(equation2, DOWN, buff=1)
+            self.play(FadeIn(step2_text))
+            self.wait(1)
+            
+            self.play(
+                TransformMatchingTex(equation2, equation3),
+                FadeOut(step2_text)
+            )
+            self.wait(2)
+            
+            # Divide both sides: x = 5
+            equation4 = MathTex("x", "=", "\\\\frac{10}{2}")
+            equation4.scale(1.5)
+            equation4.move_to(equation3.get_center())
+            
+            step3_text = Text("Step 3: 除以系数", font="SimHei", font_size=24, color=YELLOW)
+            step3_text.next_to(equation3, DOWN, buff=1)
+            self.play(FadeIn(step3_text))
+            self.wait(1)
+            
+            self.play(
+                TransformMatchingTex(equation3, equation4),
+                FadeOut(step3_text)
+            )
+            self.wait(2)
+            
+            # Final answer
+            answer = MathTex("x", "=", "5")
+            answer.scale(2)
+            answer.move_to(equation4.get_center())
+            answer.set_color(GREEN)
+            
+            self.play(TransformMatchingTex(equation4, answer))
+            
+            # Highlight the answer
+            box = SurroundingRectangle(answer, color=YELLOW, buff=0.2)
+            self.play(Create(box))
+            
+            # Success message
+            success_text = Text("方程求解完成！", font="SimHei", font_size=36, color=GREEN)
+            success_text.next_to(answer, DOWN, buff=1)
+            self.play(FadeIn(success_text))
+            
+        else:
+            # Generic equation solving animation
+            step_group = VGroup()
+            for i, step in enumerate(["Step 1", "Step 2"]):
+                step_text = Text(f"Step {i+1}: {step[:50]}...", font="SimHei", font_size=20)
+                step_text.move_to(ORIGIN + DOWN * (i + 1))
+                step_group.add(step_text)
+            
+            self.play(Write(step_group))
+            
+            # Final answer
+            answer_text = Text("Answer: x = ?", font="SimHei", font_size=28, color=GREEN)
+            answer_text.move_to(ORIGIN + DOWN * 3)
+            self.play(Write(answer_text))
+        
+        self.wait(3)
+`
+  }
+
+  // Build Manim script for geometry problems
+  buildGeometryManimScript(question, steps, solution) {
+    console.log('📐 生成几何问题Manim脚本...')
+    
+    // Extract values from the question
+    const baseMatch = question.match(/底边[为是：:]*(\d+)/) || question.match(/base\s*[=:]\s*(\d+)/i)
+    const heightMatch = question.match(/高[为是：:]*(\d+)/) || question.match(/height\s*[=:]\s*(\d+)/i)
+    
+    const base = baseMatch ? baseMatch[1] : '8'
+    const height = heightMatch ? heightMatch[1] : '6'
+    const area = parseInt(base) * parseInt(height) / 2
+    
+    return `from manim import *
+
+class TriangleArea(Scene):
+    def construct(self):
+        self.camera.background_color = "#1a1a1a"
+        
+        # Title
+        title = Text("${question}", font="SimHei", font_size=32, color=BLUE)
+        title.to_edge(UP, buff=0.5)
+        self.play(Write(title))
+        self.wait(1)
+        
+        # Draw triangle
+        triangle = Polygon(
+            [-3, -2, 0],  # Bottom left
+            [3, -2, 0],   # Bottom right  
+            [0, 2, 0],    # Top
+            color=WHITE,
+            stroke_width=3
+        )
+        self.play(Create(triangle))
+        self.wait(1)
+        
+        # Add labels
+        base_label = MathTex(f"b = {base}", color=YELLOW)
+        base_label.next_to(triangle, DOWN)
+        
+        # Height line
+        height_line = DashedLine(
+            start=[0, -2, 0],
+            end=[0, 2, 0],
+            color=GREEN,
+            stroke_width=2
+        )
+        height_label = MathTex(f"h = {height}", color=GREEN)
+        height_label.next_to(height_line, RIGHT)
+        
+        self.play(
+            Create(height_line),
+            Write(base_label),
+            Write(height_label)
+        )
+        self.wait(2)
+        
+        # Formula
+        formula = MathTex("A = \\\\frac{1}{2} \\\\times b \\\\times h")
+        formula.scale(1.2)
+        formula.to_edge(RIGHT).shift(UP)
+        self.play(Write(formula))
+        self.wait(1)
+        
+        # Substitute values
+        substitution = MathTex(f"A = \\\\frac{{1}}{{2}} \\\\times {base} \\\\times {height}")
+        substitution.scale(1.2)
+        substitution.move_to(formula.get_center() + DOWN * 1.5)
+        self.play(TransformFromCopy(formula, substitution))
+        self.wait(2)
+        
+        # Calculate
+        calculation = MathTex(f"A = \\\\frac{{{base} \\\\times {height}}}{{2}} = \\\\frac{{{int(base) * int(height)}}}{{2}}")
+        calculation.scale(1.2)
+        calculation.move_to(substitution.get_center() + DOWN * 1.5)
+        self.play(TransformFromCopy(substitution, calculation))
+        self.wait(2)
+        
+        # Final answer
+        answer = MathTex(f"A = {area}", color=GREEN)
+        answer.scale(1.5)
+        answer.move_to(calculation.get_center() + DOWN * 1.5)
+        self.play(Write(answer))
+        
+        # Highlight
+        box = SurroundingRectangle(answer, color=YELLOW, buff=0.2)
+        self.play(Create(box))
+        
+        # Fill the triangle
+        filled_triangle = triangle.copy()
+        filled_triangle.set_fill(BLUE, opacity=0.3)
+        self.play(FadeIn(filled_triangle))
+        
+        self.wait(3)
+`
+  }
+
   // 提取具体解题步骤（重构：每一大步为一页，内容完整，顺序严格）
   extractConcreteSteps(solution, question) {
     if (typeof solution !== 'string') return [];
@@ -1731,10 +2101,10 @@ config.output_file = "generated_universal"
     return detailedSteps;
   }
 
-  // ✅ 生成TTS音频（支持 Minimax + Web Speech API fallback）
+  // ✅ 生成TTS音频（支持 Azure + Web Speech API fallback）
   async generateTTSAudio(text, language = 'zh') {
     try {
-      console.log('🎤 尝试使用 Minimax TTS...');
+      console.log('🎤 尝试使用 Azure TTS...');
       
       // 先检查TTS服务器是否可用
       try {
@@ -1779,7 +2149,9 @@ config.output_file = "generated_universal"
       const axiosResp = await axiosInstance.post(ttsEndpoint, {
         text: text,
         language: language,
-        method: 'auto'
+        provider: 'azure', // Explicitly use Azure TTS
+        voice: 'female', // Use female voice for better clarity
+        speed: 1.0
       });
       
       const result = axiosResp.data;
@@ -1797,16 +2169,16 @@ config.output_file = "generated_universal"
           }
         }
         
-        console.log('✅ TTS 成功:', audioPath);
+        console.log('✅ Azure TTS 成功:', audioPath);
         return {
           success: true,
           audioPath: audioPath,
           duration: result.duration || 10
         };
       }
-      throw new Error('Minimax TTS 返回失败');
+      throw new Error('Azure TTS 返回失败');
     } catch (error) {
-      console.warn('❌ Minimax TTS 失败，使用 Web Speech API fallback:', error.message);
+      console.warn('❌ Azure TTS 失败，使用 Web Speech API fallback:', error.message);
       console.warn('错误类型:', error.code);
       console.warn('完整错误:', error);
       
@@ -1955,6 +2327,35 @@ config.output_file = "generated_universal"
     return 'triangle'; // 默认三角形
   }
   
+  // 判断是否应该使用原生Manim生成器
+  shouldUseNativeManim(question, solution) {
+    // DISABLE native Manim for now - waterfall works better for showing actual content
+    // Native Manim is generating generic placeholder videos
+    return false;
+    
+    // Original logic kept for reference:
+    // Only use native Manim for problems that REALLY benefit from specific visualizations
+    // const combined = (question + ' ' + solution).toLowerCase();
+    // 
+    // // Check for specific patterns that need native visualization
+    // const needsNativePatterns = [
+    //   // Inequalities with number line visualization
+    //   /[<>≤≥].*x|x.*[<>≤≥]/,
+    //   // Geometry problems that need shape visualization
+    //   /三角形.*面积|triangle.*area|圆.*半径|circle.*radius/,
+    //   // Functions that need graphing
+    //   /y\s*=.*x|f\(x\)\s*=|函数.*图像|graph.*function/,
+    // ];
+    // 
+    // const hasNativePattern = needsNativePatterns.some(pattern => pattern.test(combined));
+    // 
+    // // Exclude simple calculations or straightforward problems
+    // const isSimpleProblem = /化简|simplify|计算|calculate|求值|evaluate/.test(combined) && 
+    //                        !hasNativePattern;
+    // 
+    // return hasNativePattern && !isSimpleProblem;
+  }
+  
   // 获取图形参数
   getGraphicParams(graphicType) {
     switch(graphicType) {
@@ -1971,6 +2372,151 @@ config.output_file = "generated_universal"
     }
   }
   
+  // Build equation solving Manim script with proper animations
+  buildEquationSolvingManimScript(question, steps, solution) {
+    console.log('🔢 Building equation solving Manim script...')
+    
+    // Extract the equation from the question
+    const equationMatch = question.match(/([^：:]+[=][^。.]+)/) || 
+                         question.match(/(\d+\s*[a-zA-Z]\s*[+\-*/]\s*\d+\s*=\s*\d+)/) ||
+                         question.match(/([a-zA-Z\d\s+\-*/=]+)/)
+    const equation = equationMatch ? equationMatch[1].trim() : '2x + 5 = 15'
+    
+    // Detect if it's in Chinese or English
+    const isEnglish = /[a-zA-Z]/.test(question) && !/[\u4e00-\u9fa5]/.test(question)
+    const fontName = isEnglish ? 'Arial' : 'SimHei'
+    
+    return `from manim import *
+
+class MathSolution(Scene):
+    def construct(self):
+        self.camera.background_color = "#1a1a1a"
+        
+        # Title
+        title = Text("${question.replace(/"/g, '\\"').substring(0, 50)}", 
+                    font="${fontName}", font_size=32, color=BLUE)
+        title.to_edge(UP, buff=0.5)
+        self.play(Write(title))
+        self.wait(1)
+        
+        # Show original equation
+        try:
+            equation = MathTex("${equation.replace(/\\/g, '\\\\')}", font_size=48)
+            equation.move_to(ORIGIN + UP * 0.5)
+            self.play(Write(equation))
+            self.wait(2)
+        except:
+            # Fallback if MathTex fails
+            equation = Text("${equation}", font="${fontName}", font_size=48)
+            equation.move_to(ORIGIN + UP * 0.5)
+            self.play(Write(equation))
+            self.wait(2)
+        
+        # Show steps
+        step_text = Text("${isEnglish ? 'Step-by-step solution:' : '步骤解析：'}", 
+                        font="${fontName}", font_size=24, color=YELLOW)
+        step_text.next_to(equation, DOWN, buff=0.8)
+        self.play(FadeIn(step_text))
+        self.wait(1)
+        
+        # For equation solving, show transformation
+        if "=" in "${equation}":
+            # Simple animation showing the solution
+            solution_text = Text("${isEnglish ? 'Solution: ' : '解：'}${solution.substring(0, 30)}", 
+                               font="${fontName}", font_size=28, color=GREEN)
+            solution_text.next_to(step_text, DOWN, buff=0.5)
+            self.play(
+                FadeOut(step_text),
+                Write(solution_text)
+            )
+            self.wait(2)
+            
+            # Highlight the answer
+            box = SurroundingRectangle(solution_text, color=GREEN, buff=0.3)
+            self.play(Create(box))
+            self.wait(2)
+        
+        # Final wait
+        self.wait(3)`
+  }
+
+  // Build geometry problem Manim script with shapes
+  buildGeometryManimScript(question, steps, solution) {
+    console.log('📐 Building geometry Manim script...')
+    
+    // Extract values from the question
+    const baseMatch = question.match(/底边[为是：:]*(\d+)/) || question.match(/base\s*[=:]\s*(\d+)/i)
+    const heightMatch = question.match(/高[为是：:]*(\d+)/) || question.match(/height\s*[=:]\s*(\d+)/i)
+    
+    const base = baseMatch ? baseMatch[1] : '8'
+    const height = heightMatch ? heightMatch[1] : '6'
+    const area = parseInt(base) * parseInt(height) / 2
+    
+    const isEnglish = /[a-zA-Z]/.test(question) && !/[\u4e00-\u9fa5]/.test(question)
+    const fontName = isEnglish ? 'Arial' : 'SimHei'
+    
+    return `from manim import *
+
+class MathSolution(Scene):
+    def construct(self):
+        self.camera.background_color = "#1a1a1a"
+        
+        # Title
+        title = Text("${question.replace(/"/g, '\\"').substring(0, 50)}", 
+                    font="${fontName}", font_size=32, color=BLUE)
+        title.to_edge(UP, buff=0.5)
+        self.play(Write(title))
+        self.wait(1)
+        
+        # Draw triangle
+        triangle = Polygon(
+            [-3, -2, 0],  # Bottom left
+            [3, -2, 0],   # Bottom right  
+            [0, 2, 0],    # Top
+            color=WHITE,
+            stroke_width=3
+        )
+        self.play(Create(triangle))
+        self.wait(1)
+        
+        # Add labels
+        base_label = Text("${isEnglish ? 'base' : '底边'} = ${base}", 
+                         font="${fontName}", font_size=24, color=YELLOW)
+        base_label.next_to(triangle, DOWN)
+        
+        # Height line
+        height_line = DashedLine(
+            start=[0, -2, 0],
+            end=[0, 2, 0],
+            color=GREEN,
+            stroke_width=2
+        )
+        height_label = Text("${isEnglish ? 'height' : '高'} = ${height}", 
+                           font="${fontName}", font_size=24, color=GREEN)
+        height_label.next_to(height_line, RIGHT)
+        
+        self.play(
+            Create(height_line),
+            Write(base_label),
+            Write(height_label)
+        )
+        self.wait(2)
+        
+        # Show formula
+        formula_text = Text("${isEnglish ? 'Area = base × height ÷ 2' : '面积 = 底 × 高 ÷ 2'}", 
+                           font="${fontName}", font_size=28, color=WHITE)
+        formula_text.move_to(ORIGIN + DOWN * 0.5)
+        self.play(Write(formula_text))
+        self.wait(2)
+        
+        # Calculate
+        calc_text = Text("${isEnglish ? 'Area' : '面积'} = ${base} × ${height} ÷ 2 = ${area}", 
+                        font="${fontName}", font_size=32, color=GREEN)
+        calc_text.move_to(formula_text.get_center())
+        self.play(Transform(formula_text, calc_text))
+        self.wait(3)`
+  }
+
   // Generate a simple fallback script for network retry
   // Build a simple direct Manim script without complex dependencies
   buildSimpleDirectManimScript(steps, question, solution) {
@@ -2162,23 +2708,32 @@ class MathSolution(Scene):
   }
 
   generateSimpleFallbackScript(question, solution) {
-    const isEnglish = /[a-zA-Z]/.test(question) && !/[\u4e00-\u9fa5]/.test(question)
-    
-    // Escape quotes and special characters for Python string
-    const escapeForPython = (str) => {
-      if (!str) return ''
-      // Ensure str is a string
-      const strValue = typeof str === 'string' ? str : String(str)
-      return strValue.replace(/\\/g, '\\\\')
-                     .replace(/"/g, '\\"')
-                     .replace(/'/g, "\\'")
-                     .replace(/\n/g, '\\n')
-                     .replace(/\r/g, '\\r')
-    }
-    
-    const titleText = escapeForPython(question.substring(0, 50) + (question.length > 50 ? '...' : ''))
-    const solutionText = escapeForPython(solution ? solution.substring(0, 100) + '...' : 'Solving...')
-    const fontName = isEnglish ? 'Arial' : 'SimHei'
+    // Try to use the improved generator first
+    try {
+      const improvedScript = this.manimScriptGenerator.generateManimScript(question, solution);
+      console.log('✅ 使用改进的脚本生成器创建了回退脚本');
+      return improvedScript;
+    } catch (error) {
+      console.warn('⚠️ 改进的脚本生成器在回退中失败，使用基本脚本:', error.message);
+      
+      // Original fallback code
+      const isEnglish = /[a-zA-Z]/.test(question) && !/[\u4e00-\u9fa5]/.test(question)
+      
+      // Escape quotes and special characters for Python string
+      const escapeForPython = (str) => {
+        if (!str) return ''
+        // Ensure str is a string
+        const strValue = typeof str === 'string' ? str : String(str)
+        return strValue.replace(/\\/g, '\\\\')
+                       .replace(/"/g, '\\"')
+                       .replace(/'/g, "\\'")
+                       .replace(/\n/g, '\\n')
+                       .replace(/\r/g, '\\r')
+      }
+      
+      const titleText = escapeForPython(question.substring(0, 50) + (question.length > 50 ? '...' : ''))
+      const solutionText = escapeForPython(solution ? solution.substring(0, 100) + '...' : 'Solving...')
+      const fontName = isEnglish ? 'Arial' : 'SimHei'
     
     return `from manim import *
 
@@ -2212,11 +2767,60 @@ class SimpleFallback(Scene):
         
         self.wait(3)
 `
+    }
   }
 
-  // 生成静态视觉内容（fallback）
-  generateStaticVisuals(question, script) {
-    console.log('⚠️ 使用静态视觉内容作为回退');
+  // 生成静态视觉内容（fallback）- 现在会生成真实的视频
+  async generateStaticVisuals(question, script) {
+    console.log('⚠️ 使用回退方案生成真实视频');
+    
+    const uniqueId = Date.now() + Math.floor(Math.random() * 1000);
+    const outputName = `fallback_${uniqueId}`;
+    
+    try {
+      // 生成简单的Manim脚本
+      const simpleScript = this.generateSimpleFallbackScript(question, script?.solution || '');
+      
+      // 调用Manim服务器生成视频
+      const isBrowser = typeof window !== 'undefined';
+      const baseURL = isBrowser ? window.location.origin : 'http://localhost:5173';
+      const fullURL = this.config.manim.endpoint.startsWith('http') 
+        ? this.config.manim.endpoint 
+        : baseURL + this.config.manim.endpoint;
+      
+      const response = await axios.post(fullURL, {
+        script: simpleScript,
+        output_name: outputName,
+        question: question,
+        solution: script?.solution || '',
+        duration: 20
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 60000
+      });
+      
+      if (response.status === 200 && response.data.success) {
+        console.log('✅ 回退视频生成成功:', response.data.video_path);
+        return [{
+          sceneId: 1,
+          animationType: 'generated_fallback',
+          videoPath: response.data.video_path,
+          duration: 20,
+          mathContent: question,
+          steps: ['显示问题', '展示解答'],
+          hasAudio: false,
+          fallback: true,
+          generated: true
+        }];
+      }
+    } catch (error) {
+      console.error('❌ 回退视频生成也失败了:', error.message);
+    }
+    
+    // 如果连简单视频都生成失败，返回最终的静态备用
+    console.log('❌ 所有视频生成方案都失败，使用最终静态备用');
     return [{
       sceneId: 1,
       animationType: 'static_fallback',
