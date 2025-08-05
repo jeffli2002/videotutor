@@ -93,14 +93,28 @@ LIGHT_GRAY = "#808080"`;
     }
     
     // Also extract final answer
-    const answerPattern = /\*?\*?最终答案\*?\*?[：:]\s*\\?\[([^\]]+)\\?\]/;
+    const answerPattern = /\*?\*?最终答案\*?\*?[：:]?\s*/;
     const answerMatch = solution.match(answerPattern);
     if (answerMatch) {
-      steps.push({
-        title: '最终答案',
-        content: '',
-        expressions: [answerMatch[1]]
-      });
+      const answerIndex = solution.indexOf(answerMatch[0]);
+      const answerSection = solution.substring(answerIndex + answerMatch[0].length);
+      const answerExpressions = this.extractMathExpressions(answerSection.split('\n')[0]);
+      
+      // If no LaTeX expressions found, look for plain text result
+      if (answerExpressions.length === 0) {
+        const plainResultMatch = answerSection.match(/([a-zA-Z]\s*[<>≤≥]\s*[\d.]+)/);
+        if (plainResultMatch) {
+          answerExpressions.push(plainResultMatch[1]);
+        }
+      }
+      
+      if (answerExpressions.length > 0) {
+        steps.push({
+          title: '最终答案',
+          content: '',
+          expressions: answerExpressions
+        });
+      }
     }
     
     return steps;
@@ -921,7 +935,6 @@ class MathSolution(Scene):
         
         # Group all content for easy management
         content = VGroup()
-        step_markers = VGroup()
         
 ${keySteps.map((step, index) => {
   const stepTitle = escapeStr(step.title);
@@ -931,7 +944,7 @@ ${keySteps.map((step, index) => {
 
   // Add all mathematical expressions for this step
   if (step.expressions && step.expressions.length > 0) {
-    // Take all expressions, not just first 2
+    // Take all expressions
     step.expressions.forEach((expr, exprIndex) => {
       const escapedExpr = escapeMathExpr(expr);
       // Slightly smaller font for subsequent expressions
@@ -940,44 +953,53 @@ ${keySteps.map((step, index) => {
         content.add(expr${index + 1}_${exprIndex + 1})
 `;
     });
-    
-    // Add step number marker
-    stepCode += `        
-        # Step number indicator (smaller and lighter)
-        step_marker_${index + 1} = Text("${index + 1}", font="Arial", color=LIGHT_GRAY, font_size=16)
-        step_markers.add(step_marker_${index + 1})
-`;
   }
   
   return stepCode;
 }).join('\n')}
         
-        # Arrange content vertically with proper spacing
-        content.arrange(DOWN, buff=0.4)
-        
-        # Position content below title with enough space
-        content.next_to(title, DOWN, buff=0.8)
-        
-        # Position step markers on the left (more space to avoid overlap)
-        for i, marker in enumerate(step_markers):
-            if i < len(content):
-                marker.next_to(content[i], LEFT, buff=0.8)
-        
-        # Animate content appearing step by step with proper timing
+        # Implement scrolling animation
+        visible_area_height = 5  # Height of visible area below title
+        displayed_content = VGroup()
         total_animation_time = 0
         step_duration = ${stepDuration}
         
         for i in range(len(content)):
-            if i < len(step_markers):
-                self.play(
-                    FadeIn(content[i]),
-                    FadeIn(step_markers[i]),
-                    run_time=0.8
-                )
-            else:
-                self.play(FadeIn(content[i]), run_time=0.8)
-            total_animation_time += 0.8
+            current_expr = content[i]
             
+            # Add to displayed content
+            displayed_content.add(current_expr)
+            
+            # Arrange all displayed content
+            displayed_content.arrange(DOWN, buff=0.4)
+            displayed_content.next_to(title, DOWN, buff=0.8)
+            
+            # Check if we need to scroll
+            content_bottom = displayed_content.get_bottom()[1]
+            visible_bottom = title.get_bottom()[1] - visible_area_height
+            
+            if content_bottom < visible_bottom:
+                # Need to scroll up
+                scroll_distance = visible_bottom - content_bottom + 0.5
+                
+                # Create animations
+                anims = [displayed_content.animate.shift(UP * scroll_distance)]
+                
+                # Add fade in for new content
+                anims.append(FadeIn(current_expr))
+                
+                self.play(*anims, run_time=0.8)
+                
+                # Fade out items that moved above the title
+                for j, item in enumerate(displayed_content):
+                    if item.get_top()[1] > title.get_bottom()[1] + 0.2:
+                        self.play(FadeOut(item), run_time=0.3)
+                        displayed_content.remove(item)
+            else:
+                # Just fade in the new content
+                self.play(FadeIn(current_expr), run_time=0.8)
+            
+            total_animation_time += 0.8
             self.wait(step_duration)
             total_animation_time += step_duration
         
@@ -1106,8 +1128,8 @@ ${displaySteps.map((step, index) => {
       return expr;
     };
     
-    // Show at most 2 key steps to minimize rendering time
-    const keySteps = steps.filter(step => step.expressions && step.expressions.length > 0).slice(0, 2);
+    // Show all steps with expressions
+    const keySteps = steps.filter(step => step.expressions && step.expressions.length > 0);
     
     return `from manim import *
 
@@ -1131,51 +1153,78 @@ class MathSolution(Scene):
                     font_size=28).to_edge(UP)
         self.play(Write(title), run_time=0.5)
         
-        # All content in one group for single animation
+        # Track all content and implement scrolling
         all_content = VGroup()
+        visible_area_height = 5  # Height of visible area below title
+        content_spacing = 0.3
         
 ${keySteps.map((step, index) => {
   const stepTitle = escapeStr(step.title);
   const shortTitle = stepTitle.length > 30 ? stepTitle.substring(0, 27) + '...' : stepTitle;
-  const stepY = 1.5 - index * 1.8;  // Calculate Y position for each step
   
   let stepCode = `        # Step ${index + 1}: ${shortTitle} (not displayed, just for reference)
         
         step${index + 1}_group = VGroup()
-        
-        # Add step number indicator (smaller, positioned separately)
-        step_num_${index + 1} = Text("${index + 1}", font="Arial", color=LIGHT_GRAY, font_size=16)
-        # Position will be set after group arrangement
 `;
 
+  // Add ALL expressions from this step
   if (step.expressions && step.expressions.length > 0) {
-    const expr = step.expressions[0];
-    const escapedExpr = escapeMathExpr(expr);
-    stepCode += `
-        expr${index + 1} = MathTex("${escapedExpr}",
+    step.expressions.forEach((expr, exprIndex) => {
+      const escapedExpr = escapeMathExpr(expr);
+      // Slightly smaller font for subsequent expressions
+      const fontSize = exprIndex === 0 ? 32 : 28;
+      stepCode += `
+        expr${index + 1}_${exprIndex + 1} = MathTex("${escapedExpr}",
                                  color=BLACK,
-                                 font_size=32)
-        step${index + 1}_group.add(expr${index + 1})
+                                 font_size=${fontSize})
+        step${index + 1}_group.add(expr${index + 1}_${exprIndex + 1})
 `;
+    });
   }
 
   stepCode += `
         step${index + 1}_group.arrange(DOWN, buff=0.3)
         
-        # Position relative to title to avoid overlap
+        # Add to all_content
+        all_content.add(step${index + 1}_group)
+        
+        # Calculate if we need to scroll
         if ${index} == 0:
+            # First step - position below title
             step${index + 1}_group.next_to(title, DOWN, buff=0.8)
         else:
-            step${index + 1}_group.move_to([0, ${stepY}, 0])
+            # Position below previous content
+            all_content.arrange(DOWN, buff=0.5)
+            all_content.next_to(title, DOWN, buff=0.8)
+            
+            # Check if content exceeds visible area
+            content_bottom = all_content.get_bottom()[1]
+            visible_bottom = title.get_bottom()[1] - visible_area_height
+            
+            if content_bottom < visible_bottom:
+                # Need to scroll up
+                scroll_distance = visible_bottom - content_bottom + 0.5
+                
+                # Animate scrolling with new content appearing
+                self.play(
+                    all_content.animate.shift(UP * scroll_distance),
+                    run_time=0.8
+                )
+                
+                # Fade out items that move above the title
+                for item in all_content:
+                    if item.get_top()[1] > title.get_bottom()[1] + 0.2:
+                        self.play(FadeOut(item), run_time=0.3)
+            else:
+                # Just fade in the new content
+                self.play(
+                    FadeIn(step${index + 1}_group),
+                    run_time=0.6
+                )
         
-        # Position step number with more space
-        step_num_${index + 1}.next_to(step${index + 1}_group, LEFT, buff=0.8)
+        if ${index} == 0:
+            self.play(FadeIn(step${index + 1}_group), run_time=0.6)
         
-        self.play(
-            FadeIn(step${index + 1}_group),
-            FadeIn(step_num_${index + 1}),
-            run_time=0.6
-        )
         self.wait(${Math.max(2, duration / (keySteps.length + 1))})
 `;
   
@@ -1183,8 +1232,10 @@ ${keySteps.map((step, index) => {
 }).join('\n')}
         
         # Final emphasis - highlight last expression
-        if 'expr${keySteps.length}' in locals():
-            self.play(expr${keySteps.length}.animate.scale(1.2).set_color(GREEN), run_time=0.6)
+        if ${keySteps.length} > 0:
+            last_step = step${keySteps.length}_group
+            if last_step.submobjects:
+                self.play(last_step[-1].animate.scale(1.2).set_color(GREEN), run_time=0.6)
         
         # Final wait to match duration
         self.wait(${Math.max(2, duration - 0.5 - keySteps.length * 2.6)})`;
