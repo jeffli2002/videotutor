@@ -47,6 +47,41 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Save subtitle file endpoint
+app.post('/api/save_subtitle', async (req, res) => {
+  try {
+    const { filename, content } = req.body;
+    
+    if (!filename || !content) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing filename or content'
+      });
+    }
+    
+    console.log(`💾 Saving subtitle file: ${filename}`);
+    
+    // Save to the same output directory as videos
+    const fs = await import('fs').then(m => m.promises);
+    const subtitlePath = join(absoluteOutputDir, filename);
+    
+    await fs.writeFile(subtitlePath, content, 'utf8');
+    
+    console.log(`✅ Subtitle file saved: ${filename}`);
+    
+    return res.json({
+      success: true,
+      path: `/rendered_videos/${filename}`
+    });
+  } catch (error) {
+    console.error('❌ Error saving subtitle file:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Simple audio-video merge endpoint
 app.post('/api/merge_audio_video', async (req, res) => {
   try {

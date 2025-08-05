@@ -5,16 +5,21 @@ import { ImprovedManimScriptGenerator } from './improvedManimScriptGenerator.js'
 import { AIDrivenManimGenerator } from './aiDrivenManimGenerator.js'
 import { SimplifiedManimGenerator } from './simplifiedManimGenerator.js'
 import { SubtitledManimGenerator } from './subtitledManimGenerator.js'
+import { AdvancedSubtitleManimGenerator } from './advancedSubtitleManimGenerator.js'
 import { TTSService } from './ttsService.js'
+import { SubtitleGenerator } from './subtitleGenerator.js'
 import axios from 'axios';
 
 export class AnimationGenerator {
   constructor() {
     this.questionAnalyzer = new QuestionAnalyzer()
     this.manimScriptGenerator = new ImprovedManimScriptGenerator()
+    this.aiDrivenManimGenerator = new AIDrivenManimGenerator()
     this.aiManimGenerator = new AIDrivenManimGenerator()
     this.simplifiedManimGenerator = new SimplifiedManimGenerator()
     this.subtitledManimGenerator = new SubtitledManimGenerator()
+    this.advancedSubtitleGenerator = new AdvancedSubtitleManimGenerator()
+    this.subtitleGenerator = new SubtitleGenerator()
     this.config = {
       manim: {
         endpoint: '/api/v2/manim/render'  // Use proxied path for real_manim_video_server_v2
@@ -45,12 +50,13 @@ export class AnimationGenerator {
       .replace(/\$\s*([^$]+)\s*\$/g, '$1') // Remove $ $ 
       .replace(/\\[a-zA-Z]+/g, '') // Remove remaining LaTeX commands
       .replace(/[{}[\]_^|]/g, '') // Remove LaTeX symbols
-      .replace(/\\\\/g, ''); // Remove backslashes
+      .replace(/\\\\/g, '') // Remove double backslashes
+      .replace(/\\/g, ''); // Remove all remaining backslashes
     
     // 语言特定的数学符号转换
     const mathTranslations = {
       en: {
-        '\\frac{([^}]+)}{([^}]+)}': '$1 over $2',
+        '\\\\frac{([^}]+)}{([^}]+)}': '$1 over $2',
         '\\^2': ' squared',
         '\\^3': ' cubed',
         '\\^([0-9]+)': ' to the power of $1',
@@ -70,18 +76,37 @@ export class AnimationGenerator {
         '>': ' greater than',
         '\\*': ' times',
         '/': ' divided by',
+        '%': ' percent',
+        '\\(': ' open parenthesis',
+        '\\)': ' close parenthesis',
+        '\\[': ' open bracket',
+        '\\]': ' close bracket',
+        '\\{': ' open brace',
+        '\\}': ' close brace',
         '\\\\pi|π': 'pi',
         '\\\\alpha|α': 'alpha',
         '\\\\beta|β': 'beta',
         '\\\\theta|θ': 'theta',
-        '\\\\lambda|λ': 'lambda'
+        '\\\\lambda|λ': 'lambda',
+        '\\\\Delta|Δ': 'delta',
+        '\\\\sum|∑': 'sum',
+        '\\\\int|∫': 'integral',
+        '\\\\infty|∞': 'infinity',
+        '\\\\rightarrow|→': ' goes to',
+        '\\\\Rightarrow|⇒': ' implies',
+        '\\\\forall|∀': 'for all',
+        '\\\\exists|∃': 'there exists',
+        '\\\\in|∈': ' in',
+        '\\\\subset|⊂': ' subset of',
+        '\\\\cup|∪': ' union',
+        '\\\\cap|∩': ' intersection'
       },
       zh: {
-        '\\frac{([^}]+)}{([^}]+)}': '$1分之$2',
+        '\\\\frac{([^}]+)}{([^}]+)}': '$1分之$2',
         '\\^2': '的平方',
         '\\^3': '的立方',
         '\\^([0-9]+)': '的$1次方',
-        '\\\\times|×': '乘',
+        '\\\\times|×': '乘以',
         '\\\\div|÷': '除以',
         '\\\\sqrt{([^}]+)}': '根号$1',
         '√': '根号',
@@ -95,13 +120,32 @@ export class AnimationGenerator {
         '=': '等于',
         '<': '小于',
         '>': '大于',
-        '\\*': '乘',
+        '\\*': '乘以',
         '/': '除以',
+        '%': '百分之',
+        '\\(': '左括号',
+        '\\)': '右括号',
+        '\\[': '左方括号',
+        '\\]': '右方括号',
+        '\\{': '左花括号',
+        '\\}': '右花括号',
         '\\\\pi|π': '派',
         '\\\\alpha|α': '阿尔法',
         '\\\\beta|β': '贝塔',
         '\\\\theta|θ': '西塔',
-        '\\\\lambda|λ': '兰姆达'
+        '\\\\lambda|λ': '兰姆达',
+        '\\\\Delta|Δ': '德尔塔',
+        '\\\\sum|∑': '求和',
+        '\\\\int|∫': '积分',
+        '\\\\infty|∞': '无穷',
+        '\\\\rightarrow|→': '趋向于',
+        '\\\\Rightarrow|⇒': '推出',
+        '\\\\forall|∀': '对于所有',
+        '\\\\exists|∃': '存在',
+        '\\\\in|∈': '属于',
+        '\\\\subset|⊂': '子集',
+        '\\\\cup|∪': '并集',
+        '\\\\cap|∩': '交集'
       },
       es: {
         '\\frac{([^}]+)}{([^}]+)}': '$1 sobre $2',
@@ -497,15 +541,15 @@ export class AnimationGenerator {
       // 调用Manim服务器渲染视频
       let videoPath = `/rendered_videos/${outputName}.mp4`
       
+      // Construct URL outside try block for use in catch block
+      const isBrowser = typeof window !== 'undefined';
+      const baseURL = isBrowser ? window.location.origin : 'http://localhost:5173';
+      const fullURL = this.config.manim.endpoint.startsWith('http') 
+        ? this.config.manim.endpoint 
+        : baseURL + this.config.manim.endpoint;
+      
       try {
         console.log('🔗 Manim endpoint:', this.config.manim.endpoint);
-        
-        // Handle both browser and Node.js environments
-        const isBrowser = typeof window !== 'undefined';
-        const baseURL = isBrowser ? window.location.origin : 'http://localhost:5173';
-        const fullURL = this.config.manim.endpoint.startsWith('http') 
-          ? this.config.manim.endpoint 
-          : baseURL + this.config.manim.endpoint;
         
         console.log('📍 Full URL will be:', fullURL);
         console.log('📜 Script being sent to Manim server:');
@@ -529,7 +573,7 @@ export class AnimationGenerator {
           headers: {
             'Content-Type': 'application/json; charset=utf-8'
           },
-          timeout: 120000 // 120 second timeout for Manim rendering
+          timeout: 60000 // 60 second timeout for complex animations
         })
         
         if (renderResponse.status === 200 && renderResponse.data.success) {
@@ -573,7 +617,7 @@ export class AnimationGenerator {
           
           try {
             // Generate a simpler script for retry
-            const simpleScript = this.generateSimpleFallbackScript(question, solution)
+            const simpleScript = await this.generateSimpleFallbackScript(question, solution)
             
             const retryResponse = await axios.post(fullURL, {
               script: simpleScript,
@@ -584,7 +628,7 @@ export class AnimationGenerator {
               headers: {
                 'Content-Type': 'application/json'
               },
-              timeout: 60000 // 60 second timeout for simpler script
+              timeout: 30000 // 30 second timeout for simpler script
             })
             
             if (retryResponse.status === 200 && retryResponse.data.success) {
@@ -595,7 +639,34 @@ export class AnimationGenerator {
             }
           } catch (retryError) {
             console.error('❌ 重试也失败了:', retryError)
-            throw new Error(`视频生成失败: 网络连接问题或服务器超时`)
+            
+            // Ultimate fallback - create a very simple but guaranteed-to-work video
+            console.log('🔄 使用终极简单脚本...');
+            try {
+              const ultraSimpleScript = this.generateUltraSimpleScript(question, solution);
+              const ultimateResponse = await axios.post(fullURL, {
+                script: ultraSimpleScript,
+                output_name: 'ultimate_fallback_' + Date.now(),
+                question: question,
+                solution: solution || 'Solving...',
+                duration: 20
+              }, {
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                timeout: 30000
+              });
+              
+              if (ultimateResponse.status === 200 && ultimateResponse.data.success) {
+                console.log('✅ 终极简单脚本成功');
+                videoPath = ultimateResponse.data.video_path;
+              } else {
+                throw new Error('终极简单脚本失败');
+              }
+            } catch (ultimateError) {
+              console.error('❌ 终极简单脚本也失败了:', ultimateError);
+              throw new Error(`视频生成失败: 网络连接问题或服务器超时`);
+            }
           }
         } else {
           // 不使用备用视频，直接返回失败
@@ -639,6 +710,32 @@ export class AnimationGenerator {
         videoPath = '/' + videoPath
       }
       
+      // Generate subtitles from TTS content
+      let subtitleData = null
+      let subtitleFilePath = null
+      try {
+        const duration = Math.max(20, (finalSteps.length + concepts.length) * 6)
+        subtitleData = this.subtitleGenerator.generateSubtitleData(cleanedTTSText, finalSteps, duration)
+        console.log('✅ 字幕生成成功，包含', subtitleData.segments.length, '个片段')
+        
+        // Save subtitle files
+        if (subtitleData && subtitleData.vtt) {
+          const subtitleFileName = `subtitles_${uniqueId}.vtt`
+          subtitleFilePath = `/rendered_videos/${subtitleFileName}`
+          
+          // Save VTT file via an API endpoint (we'll need to create this)
+          try {
+            await this.saveSubtitleFile(subtitleFileName, subtitleData.vtt)
+            console.log('💾 字幕文件已保存:', subtitleFilePath)
+          } catch (saveError) {
+            console.error('⚠️ 字幕文件保存失败:', saveError)
+            subtitleFilePath = null
+          }
+        }
+      } catch (subtitleError) {
+        console.error('⚠️ 字幕生成失败:', subtitleError)
+      }
+      
       return [{
         sceneId: 1,
         animationType: 'ai_generated_unique',
@@ -654,6 +751,8 @@ export class AnimationGenerator {
         script: uniqueScript,
         ttsContent: ttsContent,
         ttsScript: ttsContent.join(' '), // 完整的TTS脚本
+        subtitles: subtitleData, // 添加字幕数据
+        subtitleFilePath: subtitleFilePath, // 字幕文件路径
         unique: true,
         aiGenerated: true
       }]
@@ -662,50 +761,6 @@ export class AnimationGenerator {
       console.error('❌ 独特动画生成失败:', error)
       return this.generateStaticVisuals(question, script)  // 回退到静态，但会记录
     }
-  }
-
-  // Simple fallback script that should always work
-  generateSimpleFallbackScript(question, solution, duration = 20) {
-    const questionText = question.substring(0, 50);
-    const solutionText = solution ? solution.substring(0, 100) : 'Solution';
-    
-    return `#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-from manim import *
-
-class MathSolution(Scene):
-    def construct(self):
-        # White background
-        self.camera.background_color = WHITE
-        
-        # Create subtitle area
-        subtitle_bg = Rectangle(
-            width=config.frame_width,
-            height=1.2,
-            fill_color=BLACK,
-            fill_opacity=0.7,
-            stroke_width=0
-        ).to_edge(DOWN, buff=0)
-        self.add(subtitle_bg)
-        
-        # Title
-        title = Text("${questionText}", font_size=36, color=BLUE, font="SimHei")
-        title.to_edge(UP)
-        
-        # Subtitle
-        subtitle = Text("${questionText}", font_size=20, color=WHITE, font="SimHei")
-        subtitle.move_to(subtitle_bg.get_center())
-        self.add(subtitle)
-        
-        self.play(Write(title))
-        self.wait(2)
-        
-        # Content
-        content = Text("${solutionText}", font_size=24, color=BLACK, font="SimHei")
-        content.next_to(title, DOWN, buff=1)
-        self.play(Write(content))
-        
-        self.wait(${duration - 3})`;
   }
 
   // 基于AI答案构建独特的Manim脚本 - 使用瀑布式格式
@@ -724,19 +779,38 @@ class MathSolution(Scene):
       return '';
     }
     
-    // Always use AI-driven generator which now has built-in subtitle support
+    // Use AI-driven generator as the primary choice
     try {
-      console.log('🤖 使用AI驱动的Manim生成器（含字幕功能）...');
-      const aiGeneratedScript = await this.aiManimGenerator.generateManimScript(question, solution, 20);
-      console.log('✅ 成功使用AI驱动的Manim脚本生成器创建了带字幕的动画');
+      console.log('🎯 使用AI驱动的Manim生成器作为主要方案...');
+      const aiGeneratedScript = await this.aiDrivenManimGenerator.generateManimScript(question, solution, 20);
+      console.log('✅ 成功使用AI驱动的生成器创建了动画');
       return aiGeneratedScript;
     } catch (aiError) {
       console.error('❌ AI驱动的生成器失败:', aiError.message);
-      console.error('Stack:', aiError.stack);
       
-      // Fallback to improved script generator as second choice
+      // Fallback to advanced subtitle generator for better TTS synchronization
       try {
-        console.log('⚠️ 尝试使用改进的脚本生成器作为备选...');
+        console.log('🎬 尝试使用高级字幕同步Manim生成器...');
+        console.log('📝 TTS内容预览:', ttsContent.substring(0, 100) + '...');
+        
+        // Use the advanced subtitle generator with TTS content
+        const advancedScript = await this.advancedSubtitleGenerator.generateManimScript(
+          question, 
+          solution, 
+          ttsContent || solution, // Use TTS content if available, otherwise use solution
+          20
+        );
+        console.log('✅ 成功使用高级字幕同步生成器创建了动画');
+        return advancedScript;
+      } catch (advError) {
+        console.error('❌ 高级字幕生成器也失败了:', advError.message);
+        console.error('Stack:', advError.stack);
+      }
+    }
+      
+    // Final fallback to improved script generator
+    try {
+      console.log('⚠️ 尝试使用改进的脚本生成器作为最终备选...');
         const improvedScript = this.manimScriptGenerator.generateQuestionSpecificScript(
           question,
           steps,
@@ -749,379 +823,9 @@ class MathSolution(Scene):
         
         // Simple fallback - basic script that should always work
         console.log('⚠️ 使用简单的备用脚本...');
-        return this.generateSimpleFallbackScript(question, solution, 20);
+        return await this.generateSimpleFallbackScript(question, solution);
       }
-    }
-    
-    // For other problems, use a simpler direct Manim script
-    const stringSteps = steps.map(step => {
-      if (typeof step === 'string') {
-        return step
-      } else if (step && typeof step === 'object') {
-        return step.content || step.text || String(step)
-      } else {
-        return String(step)
-      }
-    })
-    return this.buildSimpleDirectManimScript(stringSteps, question, solution)
-    
-    // 准备瀑布式内容数据
-    const contents_data = []
-    const scripts_data = []
-    
-    // 添加标题
-    contents_data.push({
-      name: "title",
-      type: "text",
-      value: question,
-      font_size: 32,
-      color: "BLUE"
-    })
-    scripts_data.push(`让我们来解决这个问题：${question}`)
-    
-    // 如果是三角形面积问题，添加面积公式
-    if (question.includes('三角形') && question.includes('面积')) {
-      contents_data.push({
-        name: "formula_intro",
-        type: "text",
-        value: "三角形面积公式：面积 = 底 × 高 ÷ 2",
-        font_size: 28,
-        color: "YELLOW"
-      })
-      scripts_data.push("首先，我们需要知道三角形面积公式：面积等于底乘以高再除以2")
-    }
-    
-    // 添加已知条件
-    if (question.match(/底边为(\d+)/) && question.match(/高为(\d+)/)) {
-      const baseMatch = question.match(/底边为(\d+)/)
-      const heightMatch = question.match(/高为(\d+)/)
-      if (baseMatch && heightMatch) {
-        contents_data.push({
-          name: "given_values",
-          type: "text",
-          value: `已知：底边 = ${baseMatch[1]}，高 = ${heightMatch[1]}`,
-          font_size: 26,
-          color: "WHITE"
-        })
-        scripts_data.push(`题目给出的条件是：底边等于${baseMatch[1]}，高等于${heightMatch[1]}`)
-        
-        // 添加三角形图形
-        contents_data.push({
-          name: "triangle_visual",
-          type: "graphic",
-          graphic_type: "triangle",
-          params: {
-            base: parseInt(baseMatch[1]),
-            height: parseInt(heightMatch[1])
-          }
-        })
-        scripts_data.push("让我们画出这个三角形")
-      }
-    } else if (question.includes('不等式')) {
-      // 对于不等式问题，显示原始不等式
-      contents_data.push({
-        name: "original_inequality",
-        type: "formula",
-        value: question.replace(/[^0-9x\-+><=\s]/g, '').trim(),
-        color: "YELLOW"
-      })
-      scripts_data.push("我们需要解这个不等式")
-    }
-    
-    // 添加计算步骤
-    if (steps.length > 0) {
-      steps.forEach((step, index) => {
-        // 处理步骤对象或字符串
-        let cleanStep = '';
-        let stepObj = null;
-        
-        if (typeof step === 'object' && step !== null) {
-          if (step.content) {
-            cleanStep = step.content
-              .replace(/^步骤\s*\d+[:：]\s*/i, '')
-              .replace(/^\d+[.、)]\s*/, '')
-              .replace(/^第\d+步[:：]\s*/i, '')
-              .replace(/^【.*?】\s*/, '') // 移除标题标记
-              .trim();
-            stepObj = step;
-          } else if (step.text) {
-            cleanStep = step.text
-              .replace(/^步骤\s*\d+[:：]\s*/i, '')
-              .replace(/^\d+[.、)]\s*/, '')
-              .replace(/^第\d+步[:：]\s*/i, '')
-              .replace(/^【.*?】\s*/, '') // 移除标题标记
-              .trim();
-            stepObj = step;
-          } else {
-            cleanStep = String(step).trim();
-          }
-        } else if (typeof step === 'string') {
-          cleanStep = step
-            .replace(/^步骤\s*\d+[:：]\s*/i, '')
-            .replace(/^\d+[.、)]\s*/, '')
-            .replace(/^第\d+步[:：]\s*/i, '')
-            .trim();
-        } else {
-          cleanStep = String(step).trim();
-        }
-        
-        // 检查是否包含计算
-        if (cleanStep.includes('=') || cleanStep.includes('×') || cleanStep.includes('÷')) {
-          // 分离文字描述和公式
-          const parts = cleanStep.split(/[:：]/)
-          if (parts.length > 1) {
-            // 先添加描述
-            contents_data.push({
-              name: `step_desc_${index + 1}`,
-              type: "text",
-              value: `步骤 ${index + 1}: ${parts[0].trim()}`,
-              font_size: 24,
-              color: "WHITE"
-            })
-            // 再添加公式
-            contents_data.push({
-              name: `step_formula_${index + 1}`,
-              type: "formula",
-              value: parts[1].trim().replace(/×/g, '\\times').replace(/÷/g, '\\div'),
-              color: "WHITE"
-            })
-            scripts_data.push(`第${index + 1}步，${cleanStep}`)
-          } else {
-            contents_data.push({
-              name: `step_${index + 1}`,
-              type: "text",
-              value: `步骤 ${index + 1}: ${cleanStep}`,
-              font_size: 24,
-              color: "WHITE"
-            })
-            scripts_data.push(`第${index + 1}步，${cleanStep}`)
-          }
-        } else {
-          contents_data.push({
-            name: `step_${index + 1}`,
-            type: "text",
-            value: `步骤 ${index + 1}: ${cleanStep}`,
-            font_size: 24,
-            color: "WHITE"
-          })
-          scripts_data.push(`第${index + 1}步，${cleanStep}`)
-        }
-      })
-    } else {
-      // 如果没有步骤，生成默认的计算步骤
-      console.log('⚠️ 没有提取到步骤，生成默认计算步骤')
-      contents_data.push({
-        name: "step_1",
-        type: "text",
-        value: "步骤 1: 代入公式计算",
-        font_size: 24,
-        color: "WHITE"
-      })
-      contents_data.push({
-        name: "step_1_formula",
-        type: "formula",
-        value: "面积 = 8 \\times 6 \\div 2",
-        color: "WHITE"
-      })
-      contents_data.push({
-        name: "step_2",
-        type: "text",
-        value: "步骤 2: 计算乘积",
-        font_size: 24,
-        color: "WHITE"
-      })
-      contents_data.push({
-        name: "step_2_formula",
-        type: "formula",
-        value: "面积 = 48 \\div 2",
-        color: "WHITE"
-      })
-      contents_data.push({
-        name: "step_3",
-        type: "text",
-        value: "步骤 3: 得出最终答案",
-        font_size: 24,
-        color: "WHITE"
-      })
-      contents_data.push({
-        name: "step_3_formula",
-        type: "formula",
-        value: "面积 = 24",
-        color: "WHITE"
-      })
-      scripts_data.push("第1步，代入公式计算：面积等于8乘以6除以2")
-      scripts_data.push("第2步，计算乘积：面积等于48除以2")
-      scripts_data.push("第3步，得出最终答案：面积等于24")
-    }
-    
-    // 添加最终答案
-    const answerMatch = solution.match(/答案[是为：:]\s*(.+?)(?:\n|$)/i) || 
-                       solution.match(/因此[，,]\s*(.+?)(?:\n|$)/i) ||
-                       solution.match(/所以[，,]\s*(.+?)(?:\n|$)/i) ||
-                       solution.match(/面积\s*=\s*(\d+)/i)
-    
-    if (answerMatch && answerMatch[1]) {
-      contents_data.push({
-        name: "answer",
-        type: "text",
-        value: `答案：${answerMatch[1].trim()}`,
-        font_size: 28,
-        color: "GREEN"
-      })
-      scripts_data.push(`最终答案是：${answerMatch[1].trim()}`)
-    } else if (question.includes('三角形') && question.includes('面积')) {
-      // 默认答案
-      contents_data.push({
-        name: "answer",
-        type: "text",
-        value: "答案：24",
-        font_size: 28,
-        color: "GREEN"
-      })
-      scripts_data.push("最终答案是：24")
-    }
-    
-    // 转换为JSON字符串并转义以嵌入Python
-    const contentsJson = JSON.stringify(contents_data, null, 2)
-    const scriptsJson = JSON.stringify(scripts_data, null, 2)
-    
-    // Escape JSON for Python string - using base64 to avoid quote issues
-    const contentsJsonBase64 = Buffer.from(contentsJson).toString('base64')
-    const scriptsJsonBase64 = Buffer.from(scriptsJson).toString('base64')
-    
-    // 生成瀑布式Manim脚本
-    const uniqueScript = `#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-from manim import *
-import json
-import sys
-import os
-import base64
-
-# 添加路径以导入瀑布式场景
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-try:
-    from test_waterfall_optimized_v2 import UniversalWaterfallScene
-except ImportError:
-    # 回退实现
-    class UniversalWaterfallScene(Scene):
-        def __init__(self, contents_data=None, scripts_data=None, **kwargs):
-            super().__init__(**kwargs)
-            self.dynamic_contents_data = contents_data or []
-            self.dynamic_scripts_data = scripts_data or []
-        
-        def construct(self):
-            self.camera.background_color = BLACK
-            # 简化的瀑布式实现
-            y_position = 3
-            for i, content_data in enumerate(self.dynamic_contents_data):
-                if content_data['type'] == 'text':
-                    text = Text(content_data['value'], font_size=content_data.get('font_size', 24))
-                    text.move_to([0, y_position, 0])
-                    self.play(Write(text))
-                    y_position -= 1
-                elif content_data['type'] == 'formula':
-                    formula = MathTex(content_data['value'])
-                    formula.move_to([0, y_position, 0])
-                    self.play(Write(formula))
-                    y_position -= 1
-                self.wait(0.5)
-
-class AISolutionScene(UniversalWaterfallScene):
-    def __init__(self, **kwargs):
-        # Decode base64 JSON data
-        contents_json = base64.b64decode("${contentsJsonBase64}").decode('utf-8')
-        scripts_json = base64.b64decode("${scriptsJsonBase64}").decode('utf-8')
-        
-        # Parse JSON
-        contents_data = json.loads(contents_json)
-        scripts_data = json.loads(scripts_json)
-        
-        super().__init__(contents_data=contents_data, scripts_data=scripts_data, **kwargs)
-
-# 配置
-config.frame_rate = 30
-config.pixel_height = 1080
-config.pixel_width = 1920
-config.background_color = BLACK
-`
-    
-    return uniqueScript
   }
-
-  // 基于AI答案生成独特的TTS内容 - 与瀑布式脚本同步
-  generateUniqueTTSFromAI(steps, concepts, question, solution) {
-    console.log('🎤 为AI答案生成与瀑布式内容同步的TTS...')
-    
-    // 创建与瀑布式scripts_data完全同步的TTS内容
-    const tts_content = []
-    
-    // 1. 标题对应的TTS
-    tts_content.push(`让我们来解决这个问题：${question}`)
-    
-    // 2. 概念对应的TTS（如果有）
-    if (concepts.length > 0) {
-      tts_content.push(`这个问题涉及的核心概念包括：${concepts.join('、')}`)
-    }
-    
-    // 3. 步骤对应的TTS
-    steps.forEach((step, index) => {
-      let stepText = '';
-      
-      // 处理步骤对象或字符串
-      if (typeof step === 'object' && step !== null) {
-        // 处理对象类型的步骤
-        if (step.content) {
-          stepText = step.content;
-        } else if (step.text) {
-          stepText = step.text;
-        } else {
-          // 如果对象没有content或text属性，尝试转换为字符串
-          stepText = String(step);
-        }
-        // 如果步骤有图形，添加描述
-        if (step.hasGraphic) {
-          tts_content.push(`现在让我们画出${this.getGraphicDescription(step.graphicType)}`);
-        }
-      } else if (typeof step === 'string') {
-        stepText = step;
-      } else {
-        // 其他类型，强制转换为字符串
-        stepText = String(step);
-      }
-      
-      // 清理步骤文本
-      let cleanStep = stepText
-        .replace(/^步骤\s*\d+[:：]\s*/, '')
-        .replace(/^【.*?】\s*/, '') // 移除标题标记
-        .trim();
-      
-      if (cleanStep) {
-        // 为每个步骤添加序号说明
-        if (index === 0) {
-          tts_content.push(`第一步，${cleanStep}`);
-        } else if (index === steps.length - 1) {
-          tts_content.push(`最后，${cleanStep}`);
-        } else {
-          tts_content.push(`第${index + 1}步，${cleanStep}`);
-        }
-      }
-    })
-    
-    // 4. 最终答案对应的TTS
-    const answerMatch = solution.match(/答案[是为：:]\s*(.+?)(?:\n|$)/i) || 
-                       solution.match(/因此[，,]\s*(.+?)(?:\n|$)/i) ||
-                       solution.match(/所以[，,]\s*(.+?)(?:\n|$)/i)
-    
-    if (answerMatch && answerMatch[1]) {
-      tts_content.push(`最终答案是：${answerMatch[1].trim()}`)
-    }
-    
-    // 返回数组形式的TTS内容，与瀑布式scripts_data格式一致
-    return tts_content
-  }
-
   // 当无法提取步骤时的动态内容生成
   generateDynamicContentFromAIAnswer(question, solution, outputName) {
     console.log('🎬 基于完整的AI答案生成动态内容...')
@@ -2707,67 +2411,153 @@ class MathSolution(Scene):
 `
   }
 
-  generateSimpleFallbackScript(question, solution) {
-    // Try to use the improved generator first
-    try {
-      const improvedScript = this.manimScriptGenerator.generateManimScript(question, solution);
-      console.log('✅ 使用改进的脚本生成器创建了回退脚本');
-      return improvedScript;
-    } catch (error) {
-      console.warn('⚠️ 改进的脚本生成器在回退中失败，使用基本脚本:', error.message);
-      
-      // Original fallback code
-      const isEnglish = /[a-zA-Z]/.test(question) && !/[\u4e00-\u9fa5]/.test(question)
-      
-      // Escape quotes and special characters for Python string
-      const escapeForPython = (str) => {
-        if (!str) return ''
-        // Ensure str is a string
-        const strValue = typeof str === 'string' ? str : String(str)
-        return strValue.replace(/\\/g, '\\\\')
+  generateUltraSimpleScript(question, solution) {
+    // Ultra-simple script that will always work and shows actual content
+    const isEnglish = /[a-zA-Z]/.test(question) && !/[\u4e00-\u9fa5]/.test(question);
+    const fontName = isEnglish ? 'Arial' : 'SimHei';
+    
+    const escapeForPython = (str) => {
+      if (!str) return '';
+      return String(str).replace(/\\/g, '\\\\')
                        .replace(/"/g, '\\"')
                        .replace(/'/g, "\\'")
-                       .replace(/\n/g, '\\n')
-                       .replace(/\r/g, '\\r')
-      }
-      
-      const titleText = escapeForPython(question.substring(0, 50) + (question.length > 50 ? '...' : ''))
-      const solutionText = escapeForPython(solution ? solution.substring(0, 100) + '...' : 'Solving...')
-      const fontName = isEnglish ? 'Arial' : 'SimHei'
+                       .replace(/\n/g, ' ')
+                       .replace(/\r/g, ' ');
+    };
     
+    const safeQuestion = escapeForPython(question).substring(0, 80);
+    
+    // Extract a simple math expression from the question
+    const mathMatch = question.match(/[\d\+\-\*\/\=\>\<\(\)]+/g);
+    const hasMath = mathMatch && mathMatch.length > 0;
+    const mathExpr = hasMath ? escapeForPython(mathMatch[0]) : '';
+    
+    return `from manim import *
+
+class MathSolution(Scene):
+    def construct(self):
+        self.camera.background_color = WHITE
+        
+        # Title with question
+        title = Text("${safeQuestion}",
+                    font="${fontName}",
+                    color=BLUE,
+                    font_size=26).to_edge(UP)
+        self.play(FadeIn(title), run_time=0.5)
+        self.wait(1)
+        
+        # Show math expression if found
+        ${hasMath ? `try:
+            math_expr = MathTex("${mathExpr}", font_size=40, color=BLACK)
+            math_expr.move_to(ORIGIN + UP * 0.5)
+            self.play(Write(math_expr), run_time=0.8)
+            self.wait(1)
+        except:
+            # Fallback if MathTex fails
+            math_text = Text("${mathExpr}", font="${fontName}", font_size=36, color=BLACK)
+            math_text.move_to(ORIGIN + UP * 0.5)
+            self.play(Write(math_text), run_time=0.8)
+            self.wait(1)` : ''}
+        
+        # Three simple steps
+        step1 = Text("${isEnglish ? 'Step 1: Analyze' : '步骤 1: 分析问题'}", 
+                    font="${fontName}", color=BLUE_D, font_size=22)
+        step1.move_to(ORIGIN ${hasMath ? '+ DOWN * 0.5' : ''})
+        self.play(FadeIn(step1, shift=DOWN*0.2), run_time=0.4)
+        self.wait(0.5)
+        
+        step2 = Text("${isEnglish ? 'Step 2: Calculate' : '步骤 2: 计算答案'}", 
+                    font="${fontName}", color=BLUE_D, font_size=22)
+        step2.next_to(step1, DOWN, buff=0.3)
+        self.play(FadeIn(step2, shift=DOWN*0.2), run_time=0.4)
+        self.wait(0.5)
+        
+        step3 = Text("${isEnglish ? 'Step 3: Verify' : '步骤 3: 验证结果'}", 
+                    font="${fontName}", color=BLUE_D, font_size=22)
+        step3.next_to(step2, DOWN, buff=0.3)
+        self.play(FadeIn(step3, shift=DOWN*0.2), run_time=0.4)
+        self.wait(1)
+        
+        # Success indicator
+        done = Text("✓ ${isEnglish ? 'Complete!' : '完成！'}",
+                   font="${fontName}",
+                   color=GREEN,
+                   font_size=28)
+        done.next_to(step3, DOWN, buff=0.5)
+        self.play(FadeIn(done, scale=0.5), run_time=0.5)
+        self.wait(2)
+`;
+  }
+
+  async generateSimpleFallbackScript(question, solution) {
+    console.log('📝 生成安全的回退脚本...');
+    
+    // Enhanced fallback that shows actual problem content
+    const isEnglish = /[a-zA-Z]/.test(question) && !/[\u4e00-\u9fa5]/.test(question);
+    const fontName = isEnglish ? 'Arial' : 'SimHei';
+    
+    // Escape quotes and special characters for Python string
+    const escapeForPython = (str) => {
+      if (!str) return '';
+      const strValue = typeof str === 'string' ? str : String(str);
+      return strValue.replace(/\\/g, '\\\\')
+                     .replace(/"/g, '\\"')
+                     .replace(/'/g, "\\'")
+                     .replace(/\n/g, '\\n')
+                     .replace(/\r/g, '\\r');
+    };
+    
+    // Extract key information from the solution
+    const questionEscaped = escapeForPython(question);
+    let steps = [];
+    
+    // Try to extract steps from the solution
+    if (solution) {
+      // Look for numbered steps or bullet points
+      const stepMatches = solution.match(/\d+\.\s*[^\n]+|\*\s*[^\n]+/g);
+      if (stepMatches) {
+        steps = stepMatches.slice(0, 5).map(s => escapeForPython(s.trim()));
+      } else {
+        // Split solution into sentences as steps
+        const sentences = solution.match(/[^.!?]+[.!?]+/g) || [];
+        steps = sentences.slice(0, 5).map(s => escapeForPython(s.trim()));
+      }
+    }
+    
+    // Generate a more meaningful fallback script
     return `from manim import *
 
 class SimpleFallback(Scene):
     def construct(self):
-        self.camera.background_color = "#1a1a1a"
+        self.camera.background_color = WHITE
         
         # Title
-        title = Text("${titleText}",
+        title = Text("${questionEscaped}",
                     font_size=32,
                     font="${fontName}",
-                    color=BLUE)
-        title.to_edge(UP)
+                    color=BLUE).to_edge(UP)
         self.play(Write(title))
+        self.wait(1)
         
-        # Simple solution display
-        solution_label = Text("Solution:",
-                           font_size=28,
+        # Solution steps
+        current_y = 1.5
+        ${steps.map((step, index) => `
+        step${index + 1} = Text("${step}",
+                           font_size=24,
                            font="${fontName}",
-                           color=YELLOW)
-        solution_label.next_to(title, DOWN, buff=1)
-        self.play(FadeIn(solution_label))
+                           color=BLACK).move_to([0, ${current_y - index * 0.8}, 0])
+        self.play(FadeIn(step${index + 1}))
+        self.wait(2)
+        `).join('')}
         
-        # Show result
-        result = Text("${solutionText}",
-                     font_size=24,
-                     font="${fontName}",
-                     color=WHITE)
-        result.next_to(solution_label, DOWN, buff=0.5)
-        self.play(Write(result))
-        
-        self.wait(3)
-`
-    }
+        # Final message
+        complete = Text("${isEnglish ? 'Solution Complete' : '解答完成'}",
+                       font_size=28,
+                       font="${fontName}",
+                       color=GREEN).to_edge(DOWN)
+        self.play(Write(complete))
+        self.wait(2)
+`;
   }
 
   // 生成静态视觉内容（fallback）- 现在会生成真实的视频
@@ -2779,7 +2569,7 @@ class SimpleFallback(Scene):
     
     try {
       // 生成简单的Manim脚本
-      const simpleScript = this.generateSimpleFallbackScript(question, script?.solution || '');
+      const simpleScript = await this.generateSimpleFallbackScript(question, script?.solution || '');
       
       // 调用Manim服务器生成视频
       const isBrowser = typeof window !== 'undefined';
@@ -2842,5 +2632,32 @@ class SimpleFallback(Scene):
       'rectangle': '矩形'
     };
     return descriptions[graphicType] || '图形';
+  }
+
+  // 保存字幕文件
+  async saveSubtitleFile(filename, content) {
+    try {
+      // 使用现有的文件写入API或创建新的端点
+      const response = await fetch('http://localhost:5002/api/save_subtitle', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          filename: filename,
+          content: content
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to save subtitle file: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      return result.success;
+    } catch (error) {
+      console.error('❌ Error saving subtitle file:', error);
+      throw error;
+    }
   }
 } 

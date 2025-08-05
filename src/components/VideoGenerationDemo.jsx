@@ -1889,7 +1889,38 @@ Please ensure each step is detailed and complete, suitable for K12 students to u
                             borderRadius: '8px',
                             overflow: 'hidden'
                           }}>
+                            {/* Subtitle overlay */}
+                            {result.animations?.[0]?.subtitles?.segments && (
+                              <div 
+                                className="subtitle-overlay" 
+                                style={{
+                                  position: 'absolute',
+                                  bottom: '40px',
+                                  left: '15%',
+                                  right: '15%',
+                                  padding: '6px 12px',
+                                  backgroundColor: 'rgba(255, 255, 255, 0.92)',
+                                  color: '#333',
+                                  fontSize: '12px',
+                                  textAlign: 'center',
+                                  fontFamily: '"Microsoft YaHei", Arial, sans-serif',
+                                  fontWeight: '400',
+                                  lineHeight: '1.3',
+                                  pointerEvents: 'none',
+                                  zIndex: 10,
+                                  minHeight: '32px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  borderRadius: '3px',
+                                  boxShadow: '0 1px 4px rgba(0, 0, 0, 0.08)'
+                                }}
+                              >
+                                <div id="subtitle-text" style={{ maxWidth: '90%' }}></div>
+                              </div>
+                            )}
                             <video
+                              id="math-video-player"
                               controls
                               autoPlay={false}
                               muted
@@ -1903,6 +1934,29 @@ Please ensure each step is detailed and complete, suitable for K12 students to u
                                 objectFit: 'contain'
                               }}
                               poster={result.video.thumbnailUrl}
+                              onTimeUpdate={(e) => {
+                                // Update subtitle display based on current time
+                                if (result.animations?.[0]?.subtitles?.segments) {
+                                  const currentTime = e.target.currentTime;
+                                  const segments = result.animations[0].subtitles.segments;
+                                  const currentSegment = segments.find(seg => 
+                                    currentTime >= seg.start && currentTime <= seg.end
+                                  );
+                                  
+                                  const subtitleElement = document.getElementById('subtitle-text');
+                                  if (subtitleElement) {
+                                    subtitleElement.textContent = currentSegment ? currentSegment.text : '';
+                                  }
+                                }
+                              }}
+                              onLoadedMetadata={(e) => {
+                                console.log('📺 视频元数据加载完成');
+                                // Initialize subtitles
+                                const subtitleElement = document.getElementById('subtitle-text');
+                                if (subtitleElement) {
+                                  subtitleElement.textContent = '';
+                                }
+                              }}
                             onError={(e) => {
                               console.error('❌ 视频加载失败:', e);
                               console.log('📹 尝试的视频URL:', result.video?.url || result.video?.videoUrl);
@@ -1992,6 +2046,16 @@ Please ensure each step is detailed and complete, suitable for K12 students to u
                               })()} 
                               type="video/mp4" 
                             />
+                            {/* Add WebVTT track if subtitles are available */}
+                            {result.animations?.[0]?.subtitles?.vtt && (
+                              <track
+                                kind="subtitles"
+                                src={`data:text/vtt;charset=utf-8,${encodeURIComponent(result.animations[0].subtitles.vtt)}`}
+                                srcLang={language}
+                                label={language === 'zh' ? '中文字幕' : 'English Subtitles'}
+                                default
+                              />
+                            )}
                             {language === 'zh' ? '您的浏览器不支持视频播放。' : 'Your browser does not support the video tag.'}
                           </video>
                           </div>

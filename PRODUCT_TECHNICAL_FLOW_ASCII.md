@@ -54,8 +54,9 @@ VideoTutor is an AI-powered math education platform that automatically generates
                                     ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │       Step 4: Animation Generation (animationGenerator.js)       │
-│  • Build Manim script with waterfall effects                   │
-│  • Dynamic content positioning                                  │
+│  • AI-Driven Manim generation (primary approach)               │
+│  • Fallback chain: AI → Subtitle → Improved → Simple           │
+│  • Dynamic content positioning & waterfall effects              │
 │  • Total duration passed to Manim server                       │
 └─────────────────────────────────────────────────────────────────┘
                                     │
@@ -66,16 +67,28 @@ VideoTutor is an AI-powered math education platform that automatically generates
 │  • Server: real_manim_video      │ │  • Server: tts_api_server.js │
 │    _server_v2.py (port 5006)    │ │    (port 3002)               │
 │  • Duration-aware rendering      │ │  • Azure TTS primary         │
-│  • Output: /rendered_videos/     │ │  • Output: /rendered_videos/  │
-└─────────────────────────────────┘ └─────────────────────────────┘
+│  • Math expressions only         │ │  • Full narration text       │
+│  • No narrative text in video    │ │  • Output: /rendered_videos/  │
+│  • Output: /rendered_videos/     │ └─────────────────────────────┘
+└─────────────────────────────────┘                 │
                     │                               │
                     └───────────────┬───────────────┘
+                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│        Step 5C: Subtitle Generation (New)                        │
+│  • Service: subtitleGenerator.js                               │
+│  • Generates SRT/VTT format from TTS text                      │
+│  • Calculates timing based on text length                      │
+│  • Saves to: /rendered_videos/subtitles_*.vtt                  │
+└─────────────────────────────────────────────────────────────────┘
+                                    │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │            Step 6: Audio-Video Merge (Port 5002)                │
 │  • audio_video_merger_5002.js                                  │
 │  • Extends video to match audio duration                        │
 │  • Uses tpad filter for last frame extension                   │
+│  • Includes subtitle file saving endpoint                       │
 │  • Output: public/rendered_videos/merged_*.mp4                 │
 └─────────────────────────────────────────────────────────────────┘
                                     │
@@ -91,9 +104,12 @@ VideoTutor is an AI-powered math education platform that automatically generates
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Step 8: Frontend Playback                     │
 │  • Video element with controls                                 │
+│  • Subtitle overlay synchronized with playback                 │
+│  • Subtitle styling: white background, dark text               │
 │  • Progress tracking and replay                                │
 │  • Download functionality                                       │
 │  • URL: /rendered_videos/filename.mp4                          │
+│  • Subtitle URL: /rendered_videos/subtitles_*.vtt              │
 │  • Note: Files in public/rendered_videos/ → served at /rendered_videos/ │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -159,6 +175,71 @@ const API_PATTERN = {
 ```
 
 ### 3.4 Video Generation Rules
+
+#### 3.4.1 AI-Driven Generation (Primary Approach)
+```javascript
+// RULE: Use AI-driven generation as the primary method
+// Located in: src/services/aiDrivenManimGenerator.js
+const generator = new AIDrivenManimGenerator();
+const script = await generator.generateManimScript(question, solution, duration);
+
+// Features:
+// - Dynamic content analysis without templates
+// - Automatic language detection (SimHei for Chinese, Arial for English)
+// - Step-by-step animations with MathTex
+// - Context-aware visualizations
+// - NO narrative text in video (only math expressions)
+// - All expressions displayed (not just first one per step)
+```
+
+#### 3.4.2 Subtitle Generation Rules
+```javascript
+// RULE: Generate subtitles for all narration
+// Located in: src/services/subtitleGenerator.js
+const subtitleGen = new SubtitleGenerator();
+const subtitles = subtitleGen.generateSubtitleData(ttsText, steps, duration);
+
+// Subtitle Features:
+// - WebVTT and SRT format support
+// - Synchronized with TTS audio timing
+// - Clean text without LaTeX escape characters
+// - Saved to /rendered_videos/subtitles_*.vtt
+```
+
+#### 3.4.3 Video Content Separation
+```javascript
+// CRITICAL RULE: Separate visual and narrative content
+// Video: Only mathematical expressions (MathTex objects)
+// Audio: Full narration with step descriptions
+// Subtitles: Synchronized text matching audio narration
+
+// ❌ WRONG: Text("首先，我们需要...", font="SimHei") in video
+// ✅ RIGHT: Only in subtitles and audio narration
+```
+
+#### 3.4.2 Fallback Chain
+```javascript
+// RULE: Implement fallback chain for reliability
+try {
+  // 1. Primary: AI-driven generator
+  script = await aiDrivenManimGenerator.generateManimScript(question, solution, duration)
+} catch (e1) {
+  try {
+    // 2. Fallback: Advanced subtitle generator
+    script = await advancedSubtitleGenerator.generateManimScript(question, solution, tts, duration)
+  } catch (e2) {
+    try {
+      // 3. Fallback: Improved script generator
+      script = improvedScriptGenerator.generateManimScript(question, solution)
+    } catch (e3) {
+      // 4. Final fallback: Simple template
+      script = generateSimpleFallbackScript(question, solution)
+    }
+  }
+}
+```
+
+#### 3.4.3 Duration Requirements
 ```python
 # RULE: Manim scripts MUST include duration parameter
 def generate_manim_script(question, solution, duration=20):
@@ -334,6 +415,19 @@ app.get('/health', (req, res) => {
 # RULE: Test complete flow before deployment
 node test_video_tts_sync_fix.js
 node verify_relative_paths.js
+node test_complete_video_generation.js
+
+# Test AI-driven generation specifically
+node test_ai_driven_generation.js
+```
+
+### 7.3 Font Verification
+```bash
+# RULE: Verify Chinese fonts before production
+fc-list | grep -i "simhei\|noto.*cjk\|yahei"
+
+# Test Manim with Chinese content
+$PYTHON_CMD test_chinese_font.py
 ```
 
 ---
@@ -405,18 +499,60 @@ function sanitizeInput(input) {
 
 ---
 
+## 11. Manim Server Configuration
+
+### 11.1 Python Environment Setup
+```bash
+# RULE: Always use virtual environment with Manim installed
+export PYTHON_CMD="/mnt/d/ai/VideoTutor/manim_wsl_env/bin/python"
+
+# Start script hierarchy:
+./start_services_ultra.sh      # Ultra-reliable startup (recommended)
+./start_manim_server.sh       # Basic startup
+./start_manim_production.sh   # Production deployment
+```
+
+### 11.2 Chinese Font Requirements
+```bash
+# RULE: Chinese fonts MUST be installed for proper rendering
+# Without fonts: Videos fall back to simple templates (62KB)
+# With fonts: Rich AI-driven content generation
+
+# Quick setup:
+./setup_chinese_fonts.sh      # System-wide installation
+./setup_fonts_local.sh        # User-local installation
+
+# Required fonts (at least one):
+- SimHei (黑体) - Primary choice
+- Noto Sans CJK SC - Recommended fallback
+- Microsoft YaHei - Windows font
+- WenQuanYi Micro Hei - Open source
+```
+
+### 11.3 Service Health Monitoring
+```bash
+# RULE: Use monitoring tools for production stability
+./manim_server_diagnostic.sh           # Comprehensive diagnostic
+./health_monitor_dashboard.js          # Real-time monitoring
+./manim_server_monitor.sh --daemon     # Auto-recovery daemon
+```
+
+---
+
 ## Implementation Checklist for New Features
 
 When implementing new features, ensure:
 
 - [ ] All paths are relative
-- [ ] Error handling with fallbacks
+- [ ] AI-driven Manim generation as primary approach
+- [ ] Error handling with fallback chain
 - [ ] Proper logging with emojis
 - [ ] Health endpoint if new service
 - [ ] Duration synchronization for media
 - [ ] Frontend path normalization
 - [ ] Resource cleanup
 - [ ] Input validation
+- [ ] Chinese font support verification
 - [ ] Integration tests
 - [ ] Documentation updates
 
